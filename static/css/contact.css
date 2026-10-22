@@ -1,0 +1,18 @@
+.site-footer{display:block;text-align:left;padding:42px clamp(18px,6vw,90px) 20px}
+.footer-main{width:min(1160px,100%);margin:0 auto 30px;display:grid;grid-template-columns:minmax(220px,1fr) minmax(280px,1.25fr);gap:42px;align-items:start}
+.footer-about{display:grid;justify-items:start;gap:12px}
+.footer-about p,.footer-contact>p{font-size:13px;line-height:1.6;color:#a9b6ca;margin:0}
+.footer-contact h2{font:700 17px Montserrat,sans-serif;color:#fff;margin:0 0 9px}
+.footer-contact-links{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
+.footer-contact-link{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid #ffffff26;border-radius:9px;color:#e7edf7;font-size:12px;transition:background .2s,border-color .2s,color .2s}
+.footer-contact-link:hover{background:#ffffff12;border-color:var(--gold);color:var(--gold2)}
+.footer-contact-link span{display:grid;place-items:center;min-width:23px;height:23px;padding:0 4px;border-radius:7px;background:#f7bd4322;color:var(--gold2);font-size:10px;font-weight:800}
+.footer-contact-link .facebook-logo{background:transparent;color:#1877f2;padding:0}
+.footer-contact-link .whatsapp-logo{background:transparent;color:#25d366;padding:0}
+.footer-contact-link svg{display:block;width:23px;height:23px}
+.footer-bottom{width:min(1160px,100%);margin:0 auto;padding-top:16px;border-top:1px solid #ffffff1c;display:flex;justify-content:space-between;gap:14px;color:#8795ab;font-size:11px}
+.footer-return-links{display:flex;align-items:center;gap:20px}
+.footer-return-links a:hover{color:var(--gold2)}
+@media(max-width:720px){.site-footer{padding:32px 20px 18px}.footer-main{grid-template-columns:1fr;gap:25px;margin-bottom:24px}.footer-bottom{flex-direction:column;align-items:center;text-align:center}}
+
+.service-whatsapp-button{background:#168b55;color:#fff;border-color:#168b55}.service-whatsapp-button:hover{background:#117746;border-color:#117746}

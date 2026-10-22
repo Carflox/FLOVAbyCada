@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#071329"><title>Mi cuenta | FLOVA by Cada</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="customer-account-page">
+<header class="account-header">
+  <a class="brand" href="/"><img class="brand-logo-img" src="/static/flova-logo-transparent.png" alt="FLOVA by Cada"></a>
+  <a href="/" class="account-back-link">← Volver a la tienda</a>
+</header>
+<main class="account-shell">
+  <section class="account-intro">
+    <p class="eyebrow">FLOVA BY CADA · MI CUENTA</p>
+    <h1>Tu compra, siempre bajo control.</h1>
+    <p>Inicia sesión o crea tu cuenta para comprar, recibir actualizaciones por correo y consultar el estado de tus pedidos.</p>
+    <div class="account-benefits"><span>✓ Seguimiento de pedidos</span><span>✓ Confirmaciones por correo</span><span>✓ Historial de compras</span></div>
+    <div class="account-logo-watermark"><img src="/static/flova-logo-transparent.png" alt=""></div>
+  </section>
+  <section class="account-panel" aria-live="polite">
+    <div id="auth-view">
+      <p class="eyebrow">ACCESO DE CLIENTES</p>
+      <h2 id="account-title">Inicia sesión para comprar</h2>
+      <p class="account-subtitle" id="account-subtitle">Usa tu correo y contraseña. Por seguridad, te pediremos un código cada 30 días.</p>
+      <div class="account-tabs" id="account-tabs">
+        <button type="button" class="account-tab active" data-account-tab="login">Iniciar sesión</button>
+        <button type="button" class="account-tab" data-account-tab="register">Registrarse</button>
+      </div>
+      <form id="customer-login-form" class="account-form">
+        <label>Correo electrónico<input type="email" name="email" required autocomplete="email" placeholder="tu@correo.com"></label>
+        <label>Contraseña<input type="password" name="password" required autocomplete="current-password" minlength="8" placeholder="Ingresa tu contraseña"></label>
+        <button class="button button-gold full-width" type="submit">Continuar</button>
+        <p class="form-message" role="status"></p>
+      </form>
+      <form id="customer-register-form" class="account-form" hidden>
+        <div class="account-form-grid">
+          <label class="span-two">Nombre y apellidos<input type="text" name="name" required maxlength="100" autocomplete="name" placeholder="Tu nombre completo"></label>
+          <label class="span-two">Correo electrónico<input type="email" name="email" required autocomplete="email" placeholder="tu@correo.com"></label>
+          <label>Tipo de documento<select name="document_type" required><option>DNI</option><option>CE</option><option>Pasaporte</option><option>RUC</option></select></label>
+          <label>Número de documento<input type="text" name="document_number" required maxlength="20" placeholder="Número de documento"></label>
+          <label class="span-two">Celular / WhatsApp<input type="tel" name="phone" required autocomplete="tel" placeholder="+51 9XXXXXXXX"></label>
+          <label class="span-two">Crear contraseña<input type="password" name="password" required minlength="8" autocomplete="new-password" placeholder="Crea una contraseña segura"></label>
+        </div>
+        <ul class="password-rules"><li>Mínimo 8 caracteres</li><li>Al menos 1 número</li><li>1 mayúscula y 1 minúscula</li><li>Sin espacios</li></ul>
+        <label class="terms-check"><input type="checkbox" name="terms" required><span>Acepto los términos de uso y la política de privacidad de FLOVA by Cada.</span></label>
+        <button class="button button-gold full-width" type="submit">Crear cuenta</button>
+        <p class="form-message" role="status"></p>
+      </form>
+      <form id="verification-form" class="account-form" hidden>
+        <div class="verification-icon">✉</div>
+        <h3>Confirma tu <span id="verification-purpose-label">correo</span></h3>
+        <p class="muted">Enviamos un código de seis dígitos a <strong id="verification-email"></strong>. Revisa también la carpeta de spam.</p>
+        <label>Código de verificación<input name="code" type="text" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" required autocomplete="one-time-code" placeholder="000000"></label>
+        <button class="button button-gold full-width" type="submit">Confirmar y continuar</button>
+        <button class="text-button resend-code" type="button" id="resend-code">Reenviar código</button>
+        <button class="text-button" type="button" id="back-to-auth">Volver</button>
+        <p class="form-message" role="status"></p>
+      </form>
+    </div>
+    <section id="customer-dashboard" hidden>
+      <div class="account-profile-heading"><div><p class="eyebrow">FLOVA BY CADA · ÁREA PERSONAL</p><h2>Mi perfil</h2></div><div class="profile-heading-user"><span class="customer-avatar" id="customer-avatar">F</span><span><strong id="customer-name">Hola</strong><small id="customer-email"></small></span></div></div>
+      <div class="account-dashboard-layout">
+        <nav class="account-side-menu" aria-label="Secciones de mi cuenta">
+          <button class="account-menu-item active" data-account-view="profile"><span>◉</span>Datos personales<i>›</i></button>
+          <button class="account-menu-item" data-account-view="addresses"><span>⌂</span>Direcciones<i>›</i></button>
+          <button class="account-menu-item" data-account-view="payments"><span>▣</span>Medios de pago<i>›</i></button>
+          <button class="account-menu-item" data-account-view="orders"><span>▤</span>Compras y pedidos<i>›</i></button>
+          <button class="account-menu-item" data-account-view="security"><span>♙</span>Seguridad<i>›</i></button>
+          <button type="button" id="customer-logout" class="account-menu-item logout-item"><span>↪</span>Cerrar sesión<i>›</i></button>
+        </nav>
+        <div class="account-view-content">
+          <section class="account-view" data-account-panel="profile"><div class="orders-section-title"><h3>Datos personales</h3><span class="verified-chip">✓ Correo verificado</span></div><form id="customer-profile-form" class="profile-edit-form"><label>Nombre y apellidos<input name="name" required maxlength="100"></label><label>Tipo de documento<select name="document_type"><option>DNI</option><option>CE</option><option>Pasaporte</option><option>RUC</option></select></label><label>Número de documento<input name="document_number" required maxlength="20"></label><label>Celular<input name="phone" required maxlength="30"></label><label>Correo electrónico<input id="profile-email" type="email" disabled></label><button class="button button-gold" type="submit">Guardar cambios</button><p class="form-message" role="status"></p></form><p class="profile-since" id="profile-since"></p></section>
+          <section class="account-view" data-account-panel="addresses" hidden><div class="orders-section-title"><div><h3>Direcciones</h3><p class="muted">Guarda los lugares donde recibes tus pedidos.</p></div><button class="button button-gold small-button" id="show-address-form" type="button">Agregar dirección</button></div><div id="customer-addresses-list" class="customer-addresses-list"></div><form id="customer-address-form" class="address-edit-form" hidden><h4>Nueva dirección</h4><div class="delivery-form-grid"><label>Etiqueta<input name="label" value="Casa" required></label><label>Nombre de quien recibe<input name="recipient" required></label><label>Celular<input name="phone" required></label><label class="wide">Dirección<input name="address" required></label><label>Distrito<input name="district"></label><label>Ciudad<input name="city" required></label><label>Región / departamento<input name="region" required></label><label class="wide">Referencia<input name="reference"></label></div><label class="save-address-check"><input name="is_default" type="checkbox"><span>Guardar como dirección principal</span></label><div class="checkout-stage-actions split"><button class="button button-outline" id="cancel-address-form" type="button">Cancelar</button><button class="button button-gold" type="submit">Guardar dirección</button></div><p class="form-message" role="status"></p></form></section>
+          <section class="account-view" data-account-panel="payments" hidden><h3>Medios de pago</h3><div class="saved-payment-info"><span class="payment-option-mark">MP</span><div><strong>Paga de forma segura</strong><p>Las tarjetas y otros medios se ingresan dentro del checkout protegido de Mercado Pago. FLOVA no guarda los datos de tu tarjeta.</p></div></div><h4>Otras opciones disponibles</h4><p class="muted">Los medios que aparecen al pagar dependen de tu cuenta y de los métodos habilitados por Mercado Pago.</p><div class="orders-section-title payment-history-title"><h3>Actividad de pagos</h3><button type="button" id="refresh-customer-orders" class="text-button">Actualizar</button></div><div id="customer-payments-list" class="customer-orders-list"></div></section>
+          <section class="account-view" data-account-panel="orders" hidden><div class="orders-section-title"><h3>Mis compras</h3><button type="button" class="text-button refresh-orders-link">Actualizar</button></div><div id="customer-orders-list" class="customer-orders-list"></div><a href="/#productos" class="button button-gold full-width account-shop-link">Seguir comprando</a></section>
+          <section class="account-view" data-account-panel="security" hidden><h3>Seguridad de la cuenta</h3><article class="security-card"><span>✉</span><div><strong>Correo verificado</strong><p>Te pediremos un código de seguridad si vuelves a iniciar sesión después de 30 días.</p></div></article><article class="security-card"><span>⌑</span><div><strong>Protección de tus pagos</strong><p>Los datos de pago se procesan en Mercado Pago y no se almacenan en FLOVA.</p></div></article><button type="button" class="button button-outline" id="customer-logout-secondary">Cerrar sesión</button></section>
+        </div>
+      </div>
+      <p class="form-message" id="dashboard-message" role="status"></p>
+    </section>
+  </section>
+</main>
+<footer class="account-footer">© <span id="account-year"></span> FLOVA by Cada · Confianza y buen servicio, siempre a tu lado.</footer>
+<script>
+const $=id=>document.getElementById(id);
+let verifyState={email:'',purpose:''};
+let customerData=null;
+let customerAddresses=[];
+const escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cash=n=>'S/ '+Number(n||0).toFixed(2);
+function safeNext(){const next=new URLSearchParams(location.search).get('next')||'';return next.startsWith('/')&&!next.startsWith('//')?next:''}
+function continueAfterAuth(){const next=safeNext();if(next){location.assign(next);return}loadDashboard()}
+$('account-year').textContent=new Date().getFullYear();
+const tabButtons=document.querySelectorAll('[data-account-tab]');
+function setAuthTab(tab){tabButtons.forEach(b=>b.classList.toggle('active',b.dataset.accountTab===tab));$('account-title').textContent=tab==='login'?'Inicia sesión para comprar':'Crea tu cuenta FLOVA';$('account-subtitle').textContent=tab==='login'?'Usa tu correo y contraseña. Por seguridad, te pediremos un código cada 30 días.':'Regístrate para comprar y seguir tus pedidos desde tu panel personal.';$('customer-login-form').hidden=tab!=='login';$('customer-register-form').hidden=tab!=='register';$('verification-form').hidden=true}
+tabButtons.forEach(b=>b.addEventListener('click',()=>setAuthTab(b.dataset.accountTab)));
+function showMessage(form,text,kind='error'){const msg=form.querySelector('.form-message');msg.textContent=text;msg.className='form-message'+(kind==='success'?' success':'')}
+function showVerification(email,purpose,message){verifyState={email,purpose};$('auth-view').querySelectorAll('form').forEach(f=>f.hidden=true);$('account-tabs').hidden=true;$('account-title').textContent='Confirma tu identidad';$('account-subtitle').textContent=message||'Para proteger tu cuenta, confirma el código que enviamos a tu correo.';$('verification-email').textContent=email;$('verification-purpose-label').textContent=purpose==='register'?'registro':'inicio de sesión';$('verification-form').hidden=false;$('verification-form').elements.code.value='';$('verification-form').querySelector('.form-message').textContent='';$('verification-form').elements.code.focus()}
+async function submitAuth(form,url,payload){const button=form.querySelector('button[type=submit]');button.disabled=true;showMessage(form,'Procesando...');try{const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok)throw new Error(data.message||'No se pudo completar la solicitud.');if(data.verification_required){showVerification(data.email,data.purpose,data.message);return}if(url==='/api/customer/login'){continueAfterAuth();return}showMessage(form,data.message||'Solicitud completada.','success')}catch(e){showMessage(form,e.message)}finally{button.disabled=false}}
+$('customer-login-form').addEventListener('submit',e=>{e.preventDefault();const f=new FormData(e.currentTarget);submitAuth(e.currentTarget,'/api/customer/login',{email:f.get('email'),password:f.get('password')})});
+$('customer-register-form').addEventListener('submit',e=>{e.preventDefault();const f=new FormData(e.currentTarget);const password=String(f.get('password')||'');if(!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)\S{8,}/.test(password)||/\s/.test(password)){showMessage(e.currentTarget,'La contraseña debe tener 8 caracteres o más, una mayúscula, una minúscula, un número y ningún espacio.');return}submitAuth(e.currentTarget,'/api/register',{name:f.get('name'),email:f.get('email'),password,phone:f.get('phone'),document_type:f.get('document_type'),document_number:f.get('document_number'),terms:f.get('terms')==='on'})});
+$('verification-form').addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget;const button=form.querySelector('button[type=submit]');button.disabled=true;showMessage(form,'Verificando código...');try{const res=await fetch('/api/customer/verify-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:verifyState.email,purpose:verifyState.purpose,code:form.elements.code.value.trim()})});const data=await res.json();if(!res.ok)throw new Error(data.message||'No se pudo verificar el código.');continueAfterAuth();}catch(err){showMessage(form,err.message)}finally{button.disabled=false}});
+$('resend-code').addEventListener('click',async()=>{const button=$('resend-code');button.disabled=true;const form=$('verification-form');try{const res=await fetch('/api/customer/resend-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(verifyState)});const data=await res.json();if(!res.ok)throw new Error(data.message||'No se pudo reenviar.');showMessage(form,data.message,'success')}catch(e){showMessage(form,e.message)}finally{setTimeout(()=>button.disabled=false,1500)}});
+$('back-to-auth').addEventListener('click',()=>{ $('account-tabs').hidden=false;setAuthTab(verifyState.purpose==='register'?'register':'login');$('account-subtitle').textContent='Puedes volver a intentarlo cuando estés listo.'});
+function showDashboard(data){customerData=data;document.body.classList.add('account-authenticated');$('auth-view').hidden=true;$('customer-dashboard').hidden=false;$('customer-name').textContent=data.name;$('customer-email').textContent=data.email;$('customer-avatar').textContent=(data.name||'F').trim().charAt(0).toUpperCase();const form=$('customer-profile-form');for(const key of ['name','document_type','document_number','phone'])form.elements[key].value=data[key]||'';$('profile-email').value=data.email;$('profile-since').textContent='Cliente FLOVA desde '+String(data.created_at||'').slice(0,10);loadCustomerOrders();loadCustomerAddresses()}
+async function loadDashboard(){const res=await fetch('/api/customer/me');const data=await res.json();if(data.authenticated)showDashboard(data);else{$('auth-view').hidden=false;$('customer-dashboard').hidden=true;$('account-tabs').hidden=false;setAuthTab('login')}}
+function statusClass(s){return s==='Entregado'?'done':s==='Cancelado'?'cancelled':s==='En preparación'?'preparing':s==='Confirmado'?'confirmed':'pending'}
+function renderOrder(o){const items=(o.items||[]).map(i=>`<div class="customer-order-item"><span>${escapeHtml(i.name)} × ${i.quantity}</span><strong>${cash(Number(i.price)*Number(i.quantity))}</strong></div>`).join('');const steps=['Pendiente','Confirmado','En preparación','Entregado'];const active=steps.indexOf(o.status);const timeline=o.status==='Cancelado'?'<div class="order-cancelled-note">Este pedido fue cancelado. Si necesitas ayuda, contacta a FLOVA by Cada.</div>':`<div class="order-timeline">${steps.map((s,i)=>`<div class="timeline-step ${i<=active?'active':''}"><span>${i<active?'✓':i+1}</span><small>${s}</small></div>`).join('')}</div>`;const payState=o.payment_status==='paid'?'Pagado':o.payment_status==='pending'?'Pago pendiente':o.payment_status==='failed'?'No pagado':'—';return `<article class="customer-order-card"><div class="customer-order-head"><div><span class="order-number">PEDIDO #${o.id}</span><h3>${escapeHtml(String(o.created_at||'').slice(0,16))}</h3></div><span class="order-status ${statusClass(o.status)}">${escapeHtml(o.status)}</span></div><div class="customer-order-items">${items}</div><div class="customer-order-meta"><span>Pago: <strong>${escapeHtml(o.payment_method||'Por coordinar')} · ${payState}</strong></span><strong class="customer-order-total">Total ${cash(o.total)}</strong></div>${timeline}${o.notes?`<p class="muted">Nota: ${escapeHtml(o.notes)}</p>`:''}</article>`}
+async function loadCustomerOrders(){const holder=$('customer-orders-list');holder.innerHTML='<p class="muted">Cargando pedidos...</p>';try{const res=await fetch('/api/customer/orders');const orders=await res.json();if(!res.ok)throw new Error(orders.message||'No se pudieron cargar tus pedidos.');holder.innerHTML=orders.length?orders.map(renderOrder).join(''):'<div class="customer-empty-orders"><span>▤</span><h3>Aún no tienes pedidos</h3><p>Cuando realices una compra, aquí podrás consultar el detalle y su estado.</p></div>';const payments=$('customer-payments-list');payments.innerHTML=orders.length?orders.map(o=>`<article class="payment-history-card"><div><span class="order-number">PEDIDO #${o.id}</span><h3>${escapeHtml((o.items||[]).map(i=>i.name).join(', '))}</h3><small>${escapeHtml(String(o.created_at||'').slice(0,16))} · ${escapeHtml(o.payment_method||'Mercado Pago')}</small></div><div class="payment-history-total"><strong>${cash(o.total)}</strong><span class="payment-chip ${o.payment_status==='paid'?'paid':o.payment_status==='failed'?'failed':'waiting'}">${o.payment_status==='paid'?'Pagado':o.payment_status==='failed'?'No pagado':'Pendiente'}</span></div></article>`).join(''):'<div class="customer-empty-orders"><span>◉</span><h3>Aún no tienes pagos</h3><p>Tus compras y pagos aparecerán aquí.</p></div>'}catch(e){holder.innerHTML=`<p class="form-message">${escapeHtml(e.message)}</p>`}}
+document.querySelectorAll('[data-account-view]').forEach(b=>b.addEventListener('click',()=>showAccountView(b.dataset.accountView)));
+function showAccountView(view){document.querySelectorAll('[data-account-view]').forEach(b=>b.classList.toggle('active',b.dataset.accountView===view));document.querySelectorAll('[data-account-panel]').forEach(p=>p.hidden=p.dataset.accountPanel!==view)}
+$('refresh-customer-orders').addEventListener('click',loadCustomerOrders);document.querySelectorAll('.refresh-orders-link').forEach(b=>b.addEventListener('click',loadCustomerOrders));
+$('customer-profile-form').addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget,button=form.querySelector('button[type=submit]'),data=Object.fromEntries(new FormData(form));button.disabled=true;try{const res=await fetch('/api/customer/profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await res.json();if(!res.ok)throw new Error(result.message||'No se pudieron guardar tus datos.');showMessage(form,'Tus datos se guardaron correctamente.','success');const me=await fetch('/api/customer/me').then(r=>r.json());showDashboard(me)}catch(err){showMessage(form,err.message)}finally{button.disabled=false}});
+$('show-address-form').addEventListener('click',()=>{$('customer-address-form').hidden=false;$('customer-address-form').scrollIntoView({behavior:'smooth',block:'center'})});$('cancel-address-form').addEventListener('click',()=>{$('customer-address-form').reset();$('customer-address-form').hidden=true});
+$('customer-address-form').addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget,button=form.querySelector('button[type=submit]'),data=Object.fromEntries(new FormData(form));data.is_default=form.elements.is_default.checked;button.disabled=true;try{const res=await fetch('/api/customer/addresses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await res.json();if(!res.ok)throw new Error(result.message||'No se pudo guardar la dirección.');form.reset();form.hidden=true;await loadCustomerAddresses()}catch(err){showMessage(form,err.message)}finally{button.disabled=false}});
+async function loadCustomerAddresses(){const holder=$('customer-addresses-list');try{const res=await fetch('/api/customer/addresses');customerAddresses=await res.json();if(!res.ok)throw new Error(customerAddresses.message||'No se pudieron cargar las direcciones.');holder.innerHTML=customerAddresses.length?customerAddresses.map(a=>`<article class="saved-address-card"><div><span class="address-label-badge">${escapeHtml(a.label)}${a.is_default?' · Principal':''}</span><h4>${escapeHtml(a.recipient)}</h4><p>${escapeHtml(a.address)}${a.district?', '+escapeHtml(a.district):''}<br>${escapeHtml(a.city)}, ${escapeHtml(a.region)}<br>${escapeHtml(a.phone)}${a.reference?'<br>Referencia: '+escapeHtml(a.reference):''}</p></div><div class="address-actions">${!a.is_default?`<button type="button" data-default-address="${a.id}">Guardar como principal</button>`:''}<button type="button" class="remove-address" data-delete-address="${a.id}">Eliminar</button></div></article>`).join(''):'<div class="customer-empty-orders"><span>⌂</span><h3>Aún no guardaste direcciones</h3><p>Agrega una para completar tu próxima compra más rápido.</p></div>'}catch(err){holder.innerHTML=`<p class="form-message">${escapeHtml(err.message)}</p>`}}
+document.addEventListener('click',async e=>{const del=e.target.closest('[data-delete-address]');const make=e.target.closest('[data-default-address]');if(del){if(!confirm('¿Eliminar esta dirección?'))return;const res=await fetch('/api/customer/addresses/'+del.dataset.deleteAddress,{method:'DELETE'});if(res.ok)loadCustomerAddresses()}if(make){const res=await fetch('/api/customer/addresses/'+make.dataset.defaultAddress+'/default',{method:'PATCH'});if(res.ok)loadCustomerAddresses()}});
+async function logoutCustomer(){await fetch('/api/customer/logout',{method:'POST'});customerData=null;document.body.classList.remove('account-authenticated');$('customer-dashboard').hidden=true;$('auth-view').hidden=false;$('account-tabs').hidden=false;setAuthTab('login')}
+$('customer-logout').addEventListener('click',logoutCustomer);$('customer-logout-secondary').addEventListener('click',logoutCustomer);
+loadDashboard().then(async()=>{if(!customerData)return;const next=safeNext();if(next){location.replace(next);return}const orderId=Number(new URLSearchParams(location.search).get('order_id'));if(!orderId)return;try{const res=await fetch('/api/customer/orders');const orders=await res.json();const order=Array.isArray(orders)?orders.find(x=>x.id===orderId):null;if(!order)return;const payment=order.payment_status;const messages={paid:'¡Pago aprobado! Tu compra ya está confirmada.',pending:'Tu pago está pendiente de confirmación. Se actualizará en Medios de pago.',failed:'El pago no se completó. Puedes volver al carrito e intentarlo otra vez.'};if(messages[payment]){$('dashboard-message').textContent=messages[payment];$('dashboard-message').className='form-message'+(payment==='paid'?' success':'');if(payment==='paid')localStorage.removeItem('flova_cart');showAccountView('payments')}}catch(e){}}).catch(()=>{});
+</script>
+</body></html>
