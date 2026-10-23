@@ -78,7 +78,7 @@ $env:FLOVA_SMTP_PASSWORD="tu_credencial_smtp_o_contrasena_de_aplicacion"
 $env:FLOVA_FROM_EMAIL="FLOVA by Cada <notificaciones@tudominio.com>"
 python app.py
 ```
-Para Gmail, usa una contraseña de aplicación si tu cuenta y configuración lo permiten; no uses tu contraseña habitual de Gmail. El proveedor debe autorizar el envío. Haz pruebas antes de usar la web con clientes reales.
+Si Gmail no permite crear una contraseña de aplicación, puedes usar cualquier proveedor transaccional que entregue credenciales SMTP. En su panel busca **SMTP**, **SMTP relay** o **SMTP credentials** y copia el host, puerto, usuario y contraseña SMTP en las variables anteriores. Usa como `FLOVA_FROM_EMAIL` un remitente autorizado por ese proveedor. No uses tu contraseña personal de correo. En Render, agrega cada variable en **Environment Variables**, guarda y espera el nuevo despliegue. Haz una prueba de registro y revisa los logs de Render; un correo solo se considera enviado si el proveedor acepta la conexión y el mensaje.
 
 ## Funciones de tienda
 - Catálogos independientes de productos y servicios con imágenes ampliables.
@@ -90,6 +90,13 @@ Para Gmail, usa una contraseña de aplicación si tu cuenta y configuración lo 
 
 ## Base de datos y actualización
 SQLite crea `flova.db` automáticamente. El inicio aplica migraciones seguras para añadir campos nuevos a instalaciones previas. Antes de actualizar un proyecto que ya contiene productos, copia `flova.db` y la carpeta `static/uploads` al proyecto nuevo.
+
+### Base de datos persistente en Render (sin costo inicial)
+Render Free elimina los archivos locales cuando el servicio se reinicia, se despliega o vuelve a arrancar después de inactividad. Por eso SQLite local (`flova.db`) no debe usarse allí para cuentas y pedidos que deban conservarse. FLOVA usa PostgreSQL cuando existe la variable `DATABASE_URL`; sin ella, mantiene SQLite para desarrollo local.
+
+Para comenzar con una base PostgreSQL gratuita, crea un proyecto en Supabase y en **Connect** copia la cadena de **Session pooler** (Render requiere una conexión IPv4). En Render → servicio FLOVA → **Environment**, agrega `DATABASE_URL` con esa cadena y guarda para que se despliegue la aplicación. No la publiques ni la compartas. En la primera conexión, FLOVA crea sus tablas automáticamente. Las cuentas y pedidos que sigan únicamente en el viejo `flova.db` no se copian automáticamente; expórtalos antes del cambio si están disponibles. El plan gratuito de Supabase limita el almacenamiento y puede pausar proyectos con poca actividad, así que reactívalo desde su panel si ocurre.
+
+La base Render Free tiene su propio límite: sus bases PostgreSQL gratuitas vencen a los 30 días. No la uses para guardar datos de clientes a largo plazo sin tener un plan de respaldo/migración.
 
 ## Antes de publicar
 - Usa HTTPS y un servidor WSGI de producción; desactiva el modo debug (`$env:FLOVA_DEBUG="0"`).

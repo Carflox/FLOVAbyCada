@@ -2,6 +2,8 @@ from flask import Flask, Response, render_template, request, jsonify, session, r
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3, os, uuid, re
+import psycopg
+from psycopg.rows import dict_row
 from pathlib import Path
 from email.message import EmailMessage
 import smtplib, secrets, hashlib, json, time, urllib.request, urllib.error, hmac, threading
@@ -35,6 +37,11 @@ def load_local_env():
 
 load_local_env()
 
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
+USE_POSTGRES = DATABASE_URL.startswith("postgresql://")
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLOVA_SECRET_KEY", "").strip() or secrets.token_hex(32)
 app.config["MAX_CONTENT_LENGTH"] = 6 * 1024 * 1024
@@ -44,10 +51,81 @@ ADMIN_USER = os.environ.get("FLOVA_ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.environ.get("FLOVA_ADMIN_PASSWORD", "cambia-esta-clave")
 
 
+class PostgresCursor:
+    def __init__(self, cursor, inserted_id=None):
+        self._cursor = cursor
+        self.lastrowid = inserted_id
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+
+class PostgresConnection:
+    """Small SQLite-compatible adapter so the existing queries can use PostgreSQL."""
+    def __init__(self, url):
+        self._conn = psycopg.connect(url, row_factory=dict_row, connect_timeout=10)
+        self._failed = False
+
+    def execute(self, query, params=()):
+        # The app uses SQLite's ? placeholders and NOCASE collation. PostgreSQL
+        # gets equivalent parameter placeholders; emails are normalized to lowercase.
+        query = query.replace(" COLLATE NOCASE", "")
+        query = re.sub(r"\bINTEGER PRIMARY KEY AUTOINCREMENT\b", "BIGSERIAL PRIMARY KEY", query, flags=re.I)
+        query = re.sub(r"\bINTEGER PRIMARY KEY\b", "BIGSERIAL PRIMARY KEY", query, flags=re.I)
+        query = re.sub(r"\bINTEGER\b", "BIGINT", query, flags=re.I)
+        query = re.sub(r"\bDATETIME\b", "TIMESTAMP", query, flags=re.I)
+        query = query.replace("?", "%s")
+        wants_id = bool(re.match(r"\s*INSERT\s+INTO\s+(customers|customer_addresses|items|orders)\b", query, re.I))
+        if wants_id and " RETURNING " not in query.upper():
+            query = query.rstrip().rstrip(";") + " RETURNING id"
+        try:
+            cursor = self._conn.execute(query, params)
+            inserted_id = cursor.fetchone()["id"] if wants_id else None
+            return PostgresCursor(cursor, inserted_id)
+        except psycopg.Error:
+            self._failed = True
+            raise
+
+    def rollback(self):
+        self._conn.rollback()
+        self._failed = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            if exc_type is not None or self._failed:
+                self._conn.rollback()
+            else:
+                self._conn.commit()
+        finally:
+            self._conn.close()
+        return False
+
+
 def db():
+    if USE_POSTGRES:
+        return PostgresConnection(DATABASE_URL)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def table_columns(conn, table):
+    if USE_POSTGRES:
+        return {row["name"] for row in conn.execute(
+            "SELECT column_name AS name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=?",
+            (table,),
+        ).fetchall()}
+    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
 
 
 def init_db():
@@ -157,7 +235,7 @@ def init_db():
             )
         """)
         # Safe migrations for existing installations; existing products and orders are preserved.
-        order_columns = {row["name"] for row in conn.execute("PRAGMA table_info(orders)").fetchall()}
+        order_columns = table_columns(conn, "orders")
         for column, definition in {
             "payment_method": "TEXT NOT NULL DEFAULT 'Por coordinar'",
             "customer_id": "INTEGER",
@@ -167,7 +245,7 @@ def init_db():
         }.items():
             if column not in order_columns:
                 conn.execute(f"ALTER TABLE orders ADD COLUMN {column} {definition}")
-        customer_columns = {row["name"] for row in conn.execute("PRAGMA table_info(customers)").fetchall()}
+        customer_columns = table_columns(conn, "customers")
         for column, definition in {
             "phone": "TEXT NOT NULL DEFAULT ''",
             "document_type": "TEXT NOT NULL DEFAULT 'DNI'",
@@ -545,7 +623,7 @@ def register_customer():
             cur = conn.execute("""INSERT INTO customers(name,email,password_hash,phone,document_type,document_number,email_verified,last_login_at)
                 VALUES(?,?,?,?,?,?,1,?)""", (name, email, generate_password_hash(password), phone, document_type, document_number, time.time()))
             customer_id = cur.lastrowid
-        except sqlite3.IntegrityError:
+        except (sqlite3.IntegrityError, psycopg.IntegrityError):
             return jsonify({"message": "Ya existe una cuenta con ese correo. Inicia sesión."}), 409
     establish_customer_session(customer_id, name, email)
     return jsonify({"ok": True, "name": name, "email": email})
@@ -603,7 +681,7 @@ def verify_customer_code():
                     VALUES(?,?,?,?,?,?,1)""", (payload["name"], email, payload["password_hash"], payload.get("phone", ""),
                     payload.get("document_type", "DNI"), payload.get("document_number", "")))
                 customer_id = cur.lastrowid
-            except sqlite3.IntegrityError:
+            except (sqlite3.IntegrityError, psycopg.IntegrityError):
                 return jsonify({"message": "Ya existe una cuenta con ese correo. Inicia sesión."}), 409
             customer_name = payload["name"]
             conn.execute("UPDATE customers SET last_verified_at=? WHERE id=?", (time.time(), customer_id))
