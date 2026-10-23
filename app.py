@@ -1008,11 +1008,16 @@ def create_order():
             (customer["name"], contact, address, notes, json_dumps(verified), total, payment_method, customer_id, customer["email"]))
         order_id = cur.lastrowid
     try:
-        gateway_items = [{"external_code": str(line["id"]), "title": line["name"],
-                          "description": line["name"], "quantity": line["quantity"],
-                          "unit_price": f"{line['price']:.2f}", "unit_measure": "unit",
-                          "total_amount": f"{line['price'] * line['quantity']:.2f}"}
-                         for line in verified]
+        gateway_items = [
+    {
+        "external_code": str(line["id"]),
+        "title": line["name"],
+        "description": line["name"],
+        "quantity": line["quantity"],
+        "unit_price": f"{line['price']:.2f}",
+    }
+    for line in verified
+]
         name_parts = customer["name"].strip().split(maxsplit=1)
         payer = {"email": customer["email"], "first_name": name_parts[0] if name_parts else "Cliente"}
         if len(name_parts) > 1:
