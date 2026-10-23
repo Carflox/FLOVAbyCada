@@ -540,14 +540,15 @@ def register_customer():
         existing = conn.execute("SELECT id FROM customers WHERE email=?", (email,)).fetchone()
     if existing:
         return jsonify({"message": "Ya existe una cuenta con ese correo. Inicia sesión."}), 409
-    payload = {"name": name, "email": email, "password_hash": generate_password_hash(password),
-               "phone": phone, "document_type": document_type, "document_number": document_number}
-    issued, error = issue_code(email, "register", payload)
-    if error:
-        return jsonify({"message": error}), 429
-    message = "Te enviamos un código de verificación a tu correo." if issued["email_sent"] else "Modo de prueba: el correo SMTP no está configurado. Revisa la terminal de VS Code para ver el código de verificación."
-    return jsonify({"ok": True, "verification_required": True, "purpose": "register", "email": email,
-                    "email_sent": issued["email_sent"], "message": message})
+    with db() as conn:
+        try:
+            cur = conn.execute("""INSERT INTO customers(name,email,password_hash,phone,document_type,document_number,email_verified,last_login_at)
+                VALUES(?,?,?,?,?,?,1,?)""", (name, email, generate_password_hash(password), phone, document_type, document_number, time.time()))
+            customer_id = cur.lastrowid
+        except sqlite3.IntegrityError:
+            return jsonify({"message": "Ya existe una cuenta con ese correo. Inicia sesión."}), 409
+    establish_customer_session(customer_id, name, email)
+    return jsonify({"ok": True, "name": name, "email": email})
 
 
 @app.post("/api/customer/login")
@@ -560,20 +561,9 @@ def customer_login():
     if not customer or not check_password_hash(customer["password_hash"], password):
         return jsonify({"message": "Correo o contraseña incorrectos."}), 401
     now = time.time()
-    verification_interval = 30 * 24 * 60 * 60
-    last_verified_at = customer["last_verified_at"]
-    if last_verified_at is None or now - last_verified_at >= verification_interval:
-        issued, error = issue_code(email, "login", {"customer_id": customer["id"]})
-        if error:
-            return jsonify({"message": error}), 429
-        message = "Te enviamos un código de seguridad a tu correo." if issued["email_sent"] else "Modo de prueba: el correo SMTP no está configurado. Revisa la terminal de VS Code para ver el código de verificación."
-        return jsonify({"ok": True, "verification_required": True, "purpose": "login", "email": email,
-                        "email_sent": issued["email_sent"], "message": message})
-
     with db() as conn:
         conn.execute("UPDATE customers SET last_login_at=? WHERE id=?", (now, customer["id"]))
     establish_customer_session(customer["id"], customer["name"], email)
-    send_email(email, "Inicio de sesión confirmado — FLOVA by Cada", f"Hola {customer['name']},\n\nTu inicio de sesión en FLOVA by Cada se confirmó correctamente. Si no fuiste tú, cambia tu contraseña y contacta con nosotros.\n\nFLOVA by Cada")
     return jsonify({"ok": True, "name": customer["name"], "email": email})
 
 
