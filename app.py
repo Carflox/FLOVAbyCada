@@ -783,6 +783,25 @@ def admin_items():
     return jsonify([item_dict(r) for r in rows])
 
 
+@app.post("/api/admin/customers/reset-password")
+def admin_reset_customer_password():
+    if not is_admin():
+        return jsonify({"message": "No autorizado"}), 401
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    password = str(data.get("password", ""))
+    if not email or len(password) < 8:
+        return jsonify({"message": "Indica el correo del cliente y una contraseña de al menos 8 caracteres."}), 400
+    with db() as conn:
+        customer = conn.execute("SELECT id FROM customers WHERE email=?", (email,)).fetchone()
+        if not customer:
+            return jsonify({"message": "No existe una cuenta con ese correo."}), 404
+        conn.execute("UPDATE customers SET password_hash=? WHERE id=?",
+                     (generate_password_hash(password), customer["id"]))
+    app.logger.info("Administrador restableció la contraseña de una cuenta de cliente.")
+    return jsonify({"ok": True, "message": "Contraseña actualizada. El cliente ya puede iniciar sesión."})
+
+
 @app.post("/api/admin/items")
 def create_item():
     if not is_admin():
