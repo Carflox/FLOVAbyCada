@@ -333,3 +333,8 @@ body { background:#fbfaf7; color:var(--ink); }
   .payment-method-icon img, .payment-method-icon.cash-icon img { max-width: 76px; }
   .payment-method-icon.yape-icon img { width: 44px; height: 44px; }
 }
+
+/* Selector geográfico del checkout y de las direcciones de cliente */
+.delivery-form-grid select{width:100%;min-height:42px;padding:11px 36px 11px 12px;border:1px solid #dce2eb;border-radius:8px;background:#fff;color:var(--ink);outline:none;font:inherit;font-size:12px;}
+.delivery-form-grid select:focus{border-color:#bd8a2e;box-shadow:0 0 0 3px #d3a54224;}
+.delivery-form-grid select:disabled{background:#f3f5f8;color:#8791a2;cursor:not-allowed;}
