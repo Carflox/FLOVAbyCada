@@ -32,14 +32,6 @@ body { background:#fbfaf7; color:var(--ink); }
 .trust-points { gap:12px 19px; color:#e3e9f3; }
 .trust-points span { display:inline-flex; align-items:center; gap:7px; }
 .hero-emblem { width:100%; max-width:590px; margin:0; filter:none; }
-.hero-brand-panel { position:relative; overflow:hidden; border:1px solid rgba(246,217,142,.5); border-radius:22px; background:#07152d; box-shadow:0 26px 70px rgba(0,0,0,.3),0 0 0 7px rgba(255,255,255,.035); }
-.hero-brand-panel::after { content:""; position:absolute; inset:0; background:linear-gradient(100deg,transparent 55%,rgba(11,20,40,.18)); pointer-events:none; }
-.hero-brand-panel .hero-logo-img { width:100%; height:auto; aspect-ratio:1030/360; object-fit:cover; }
-.hero-panel-caption { display:flex; align-items:center; gap:12px; padding:14px 18px; color:#fff; background:#101a35; }
-.hero-panel-caption>span:first-child { display:grid; gap:3px; }
-.hero-panel-caption strong { font:700 13px Montserrat,sans-serif; letter-spacing:.3px; }
-.hero-panel-caption small { color:#bac6d9; font-size:11px; }
-.hero-panel-arrow { margin-left:auto; color:var(--gold2); font-size:21px; }
 .brand-benefits { position:relative; z-index:2; width:min(1180px,calc(100% - 48px)); margin:-28px auto 0; padding:20px 24px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; border:1px solid #ece7d9; border-radius:18px; background:#fff; box-shadow:0 16px 40px rgba(16,26,53,.09); }
 .brand-benefit { display:flex; align-items:center; gap:13px; padding:8px 18px; }
 .brand-benefit+.brand-benefit { border-left:1px solid var(--line); }
@@ -165,8 +157,6 @@ body { background:#fbfaf7; color:var(--ink); }
  .hero { display:flex;flex-direction:column;align-items:stretch;gap:30px;min-height:auto;padding:50px 22px 58px; }
  .hero-content { max-width:640px; }
  .hero h1 { font-size:clamp(36px,9vw,52px); }
- .hero-brand-panel { width:100%;max-width:640px;align-self:center;border-radius:17px; }
- .hero-panel-caption { padding:11px 14px; }
  .brand-benefits { width:calc(100% - 28px);grid-template-columns:1fr;margin-top:-22px;padding:10px 15px;border-radius:16px; }
  .brand-benefit { padding:9px 2px; }
  .brand-benefit+.brand-benefit { border-left:0;border-top:1px solid var(--line); }
