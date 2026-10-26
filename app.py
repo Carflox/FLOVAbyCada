@@ -1131,6 +1131,16 @@ def create_order():
             "total_amount": f"{total:.2f}",
             "external_reference": str(order_id),
             "description": ", ".join(f"{line['name']} x{line['quantity']}" for line in verified)[:150],
+            "items": [
+                {
+                    "external_code": str(line["id"]),
+                    "title": line["name"],
+                    "description": line["name"],
+                    "quantity": int(line["quantity"]),
+                    "unit_price": f"{float(line['price']):.2f}",
+                }
+                for line in verified
+            ],
             "payer": payer,
             "transactions": {"payments": [payment]},
         }
