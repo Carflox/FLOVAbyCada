@@ -190,3 +190,71 @@ body { background:#fbfaf7; color:var(--ink); }
  .payment-method-copy strong { font-size:11px; }
  .payment-method-copy small { font-size:9px; }
 }
+/* Checkout: keep FLOVA branding visible and give payment marks room to read. */
+.checkout-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  justify-content: space-between;
+}
+.checkout-header .brand {
+  display: inline-flex;
+  align-items: center;
+  min-width: 148px;
+}
+.checkout-header .brand-logo-img {
+  display: block;
+  object-fit: contain;
+  object-position: left center;
+}
+.payment-method-card {
+  grid-template-columns: 20px 138px minmax(0, 1fr) 18px;
+  min-height: 82px;
+}
+.payment-method-icon {
+  box-sizing: border-box;
+  width: 130px;
+  min-width: 0;
+  height: 48px;
+  padding: 0 9px;
+  flex: none;
+  overflow: visible;
+  border-radius: 12px;
+}
+.payment-method-icon.yape-icon {
+  width: 82px;
+  min-width: 82px;
+  background: #74278c;
+  color: #fff;
+}
+.payment-method-icon.cash-icon {
+  width: 130px;
+  min-width: 0;
+  background: #fff5d9;
+  color: #754f00;
+}
+.payment-logo-mp { gap: 8px; }
+.payment-logo-mp i { width: 28px; height: 28px; font-size: 10px; }
+.payment-logo-mp > span { font-size: 13px; }
+.payment-wordmark { display: inline-block; font-size: 13px; }
+.payment-method-copy { min-width: 0; }
+.payment-method-copy strong, .payment-method-copy small { overflow-wrap: anywhere; }
+.payment-method-card:focus-within { outline: 3px solid rgba(59, 103, 255, .18); outline-offset: 2px; }
+@media (max-width: 680px) {
+  .checkout-header { position: sticky; top: 0; z-index: 50; }
+  .checkout-header .brand { min-width: 112px; }
+  .payment-method-card { grid-template-columns: 18px 94px minmax(0, 1fr) 14px; gap: 8px; }
+  .payment-method-icon { width: 90px; height: 42px; padding-inline: 5px; }
+  .payment-method-icon.yape-icon { width: 66px; min-width: 66px; }
+  .payment-method-icon.cash-icon { width: 90px; }
+  .payment-logo-mp { gap: 4px; }
+  .payment-logo-mp i { width: 22px; height: 22px; font-size: 8px; }
+  .payment-logo-mp > span, .payment-wordmark { font-size: 10px; }
+}
+@media (max-width: 420px) {
+  .payment-method-card { grid-template-columns: 17px 80px minmax(0, 1fr) 12px; gap: 6px; padding-inline: 8px; }
+  .payment-method-icon { width: 78px; }
+  .payment-method-icon.yape-icon { width: 60px; min-width: 60px; }
+  .payment-method-icon.cash-icon { width: 78px; }
+  .payment-logo-mp > span, .payment-wordmark { font-size: 9px; }
+}
