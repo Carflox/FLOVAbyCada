@@ -7,7 +7,7 @@ from psycopg.rows import dict_row
 from pathlib import Path
 from email.message import EmailMessage
 import smtplib, secrets, hashlib, json, time, urllib.request, urllib.error, hmac, threading
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode, quote, urlparse
 
@@ -136,6 +136,7 @@ def init_db():
                 type TEXT NOT NULL CHECK(type IN ('product','service')),
                 name TEXT NOT NULL,
                 category TEXT NOT NULL DEFAULT 'General',
+                mp_category_id TEXT NOT NULL DEFAULT '',
                 price REAL NOT NULL DEFAULT 0,
                 description TEXT NOT NULL DEFAULT '',
                 image TEXT NOT NULL DEFAULT '',
@@ -236,6 +237,9 @@ def init_db():
             )
         """)
         # Safe migrations for existing installations; existing products and orders are preserved.
+        item_columns = table_columns(conn, "items")
+        if "mp_category_id" not in item_columns:
+            conn.execute("ALTER TABLE items ADD COLUMN mp_category_id TEXT NOT NULL DEFAULT ''")
         order_columns = table_columns(conn, "orders")
         for column, definition in {
             "payment_method": "TEXT NOT NULL DEFAULT 'Por coordinar'",
@@ -942,10 +946,11 @@ def create_item():
         uploaded.save(UPLOAD_DIR / filename)
         image = f"/static/uploads/{filename}"
     with db() as conn:
-        cur = conn.execute("""INSERT INTO items(type,name,category,price,description,image,stock,active)
-            VALUES(?,?,?,?,?,?,?,1)""",
+        cur = conn.execute("""INSERT INTO items(type,name,category,mp_category_id,price,description,image,stock,active)
+            VALUES(?,?,?,?,?,?,?,?,1)""",
             (kind, name, str(data.get("category", "General")).strip() or "General",
-             price, str(data.get("description", "")).strip(), image, stock))
+             (str(data.get("mp_category_id", "")).strip() or ("electronics" if kind == "product" else "")), price,
+             str(data.get("description", "")).strip(), image, stock))
         item_id = cur.lastrowid
         row = conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
     return jsonify(item_dict(row)), 201
@@ -974,9 +979,10 @@ def update_item(item_id):
             filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
             uploaded.save(UPLOAD_DIR / filename)
             image = f"/static/uploads/{filename}"
-        conn.execute("""UPDATE items SET type=?,name=?,category=?,price=?,description=?,image=?,stock=?,active=?
+        conn.execute("""UPDATE items SET type=?,name=?,category=?,mp_category_id=?,price=?,description=?,image=?,stock=?,active=?
             WHERE id=?""",
             (kind, name, str(data.get("category", old["category"])).strip() or "General",
+             (str(data.get("mp_category_id", old["mp_category_id"])).strip() or ("electronics" if kind == "product" else "")),
              price, str(data.get("description", old["description"])).strip(), image, stock,
              int(data.get("active", old["active"])), item_id))
         row = conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
@@ -1030,7 +1036,7 @@ def create_order():
 
     with db() as conn:
         customer = conn.execute(
-            "SELECT id,name,email,phone,document_type,document_number FROM customers WHERE id=?",
+            "SELECT id,name,email,phone,document_type,document_number,created_at FROM customers WHERE id=?",
             (customer_id,),
         ).fetchone()
         if not customer:
@@ -1055,6 +1061,7 @@ def create_order():
                 return jsonify({"message": f"Stock insuficiente para {item['name']}."}), 409
             total += float(item["price"]) * qty
             verified.append({"id": item_id, "name": item["name"], "type": item["type"],
+                             "category_id": item["mp_category_id"] or "electronics",
                              "price": float(item["price"]), "quantity": qty})
         conn.execute("UPDATE customers SET phone=? WHERE id=? AND (phone='' OR phone IS NULL)", (contact, customer_id))
         for line in verified:
@@ -1121,6 +1128,21 @@ def create_order():
         else:
             payment_method = {"id": "pagoefectivo_atm", "type": "atm"}
 
+        registered_at = customer["created_at"]
+        if isinstance(registered_at, datetime):
+            registration_date = (registered_at.replace(tzinfo=timezone.utc)
+                                 if registered_at.tzinfo is None else registered_at).isoformat()
+        elif registered_at:
+            try:
+                parsed_registration_date = datetime.fromisoformat(str(registered_at).replace("Z", "+00:00"))
+                if parsed_registration_date.tzinfo is None:
+                    parsed_registration_date = parsed_registration_date.replace(tzinfo=timezone.utc)
+                registration_date = parsed_registration_date.isoformat()
+            except ValueError:
+                registration_date = None
+        else:
+            registration_date = None
+
         payment = {"amount": f"{total:.2f}", "payment_method": payment_method}
         if method_key == "pagoefectivo_atm":
             payment["expiration_time"] = "P1D"
@@ -1136,6 +1158,7 @@ def create_order():
                     "external_code": str(line["id"]),
                     "title": line["name"],
                     "description": line["name"],
+                    **({"category_id": line["category_id"]} if line.get("category_id") else {}),
                     "quantity": int(line["quantity"]),
                     "unit_price": f"{float(line['price']):.2f}",
                 }
@@ -1144,6 +1167,8 @@ def create_order():
             "payer": payer,
             "transactions": {"payments": [payment]},
         }
+        if registration_date:
+            payload["additional_info"] = {"payer": {"registration_date": registration_date}}
         if method_key == "pagoefectivo_atm":
             payload["payer"]["entity_type"] = "individual"
         remote = mercado_pago_request(
