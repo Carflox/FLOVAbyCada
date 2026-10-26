@@ -7,7 +7,7 @@ from psycopg.rows import dict_row
 from pathlib import Path
 from email.message import EmailMessage
 import smtplib, secrets, hashlib, json, time, urllib.request, urllib.error, hmac, threading
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode, quote, urlparse
 
@@ -1036,7 +1036,7 @@ def create_order():
 
     with db() as conn:
         customer = conn.execute(
-            "SELECT id,name,email,phone,document_type,document_number,created_at FROM customers WHERE id=?",
+            "SELECT id,name,email,phone,document_type,document_number FROM customers WHERE id=?",
             (customer_id,),
         ).fetchone()
         if not customer:
@@ -1128,21 +1128,6 @@ def create_order():
         else:
             payment_method = {"id": "pagoefectivo_atm", "type": "atm"}
 
-        registered_at = customer["created_at"]
-        if isinstance(registered_at, datetime):
-            registration_date = (registered_at.replace(tzinfo=timezone.utc)
-                                 if registered_at.tzinfo is None else registered_at).isoformat()
-        elif registered_at:
-            try:
-                parsed_registration_date = datetime.fromisoformat(str(registered_at).replace("Z", "+00:00"))
-                if parsed_registration_date.tzinfo is None:
-                    parsed_registration_date = parsed_registration_date.replace(tzinfo=timezone.utc)
-                registration_date = parsed_registration_date.isoformat()
-            except ValueError:
-                registration_date = None
-        else:
-            registration_date = None
-
         payment = {"amount": f"{total:.2f}", "payment_method": payment_method}
         if method_key == "pagoefectivo_atm":
             payment["expiration_time"] = "P1D"
@@ -1167,8 +1152,6 @@ def create_order():
             "payer": payer,
             "transactions": {"payments": [payment]},
         }
-        if registration_date:
-            payload["additional_info"] = {"payer": {"registration_date": registration_date}}
         if method_key == "pagoefectivo_atm":
             payload["payer"]["entity_type"] = "individual"
         remote = mercado_pago_request(
