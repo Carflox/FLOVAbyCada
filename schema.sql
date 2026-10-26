@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS items (
   id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL CHECK(type IN ('product','service')),
   name TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'General', price REAL NOT NULL DEFAULT 0,
   description TEXT NOT NULL DEFAULT '', image TEXT NOT NULL DEFAULT '', stock INTEGER NOT NULL DEFAULT 0,
+  payment_link_url TEXT NOT NULL DEFAULT '', payment_link_order_number TEXT NOT NULL DEFAULT '',
   active INTEGER NOT NULL DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS customers (
@@ -30,5 +31,7 @@ CREATE TABLE IF NOT EXISTS orders (
   address TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', items_json TEXT NOT NULL, total REAL NOT NULL,
   payment_method TEXT NOT NULL DEFAULT 'Por coordinar', status TEXT NOT NULL DEFAULT 'Pendiente',
   customer_id INTEGER, customer_email TEXT NOT NULL DEFAULT '', payment_status TEXT NOT NULL DEFAULT 'unpaid',
-  mp_order_id TEXT NOT NULL DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  payment_provider TEXT NOT NULL DEFAULT '', provider_reference TEXT NOT NULL DEFAULT '',
+  provider_details TEXT NOT NULL DEFAULT '{}', stock_deducted INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

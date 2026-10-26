@@ -135,7 +135,7 @@ body { background:#fbfaf7; color:var(--ink); }
 .admin-page { background:#f3f5f8; }
 .admin-topbar { min-height:82px; }
 .admin-layout { gap:24px; }
-.admin-sidebar,.admin-main,.mp-orders-panel,.order-card { border-radius:16px; }
+.admin-sidebar,.admin-main,.admin-section-panel,.order-card { border-radius:16px; }
 .admin-sidebar { box-shadow:0 12px 30px rgba(16,26,53,.06); }
 .admin-title-row h1 { letter-spacing:-.8px; }
 .admin-table { border-radius:12px;overflow:hidden; }
@@ -339,3 +339,6 @@ body { background:#fbfaf7; color:var(--ink); }
 .delivery-form-grid select:focus{border-color:#bd8a2e;box-shadow:0 0 0 3px #d3a54224;}
 .delivery-form-grid select:disabled{background:#f3f5f8;color:#8791a2;cursor:not-allowed;}
 .checkout-page [hidden]{display:none!important;}
+
+/* Hosted Izipay payment link and selected product on checkout. */
+.checkout-pay-product{display:grid;grid-template-columns:82px minmax(0,1fr) auto;align-items:center;gap:16px;padding:14px 16px;margin:0 0 15px;border:1px solid #e1e6ee;border-radius:13px;background:#fff}.checkout-pay-product-image{width:82px;height:82px;display:grid;place-items:center;overflow:hidden;border-radius:10px;background:#f1f4f8}.checkout-pay-product-image img{width:100%;height:100%;object-fit:cover}.checkout-pay-product-image span{font:800 30px Montserrat,sans-serif;color:#c7d1e0}.checkout-pay-product-info{display:grid;gap:5px;min-width:0}.checkout-pay-product-info small{font-size:9px;font-weight:800;letter-spacing:.12em;color:#8a6a23}.checkout-pay-product-info strong{font-size:14px;color:var(--navy);line-height:1.4}.checkout-pay-product-info>span{font-size:12px;color:var(--muted)}.checkout-pay-product-brand{display:grid;justify-items:end;gap:4px;padding-left:14px;border-left:1px solid #e6eaf0}.checkout-pay-product-brand>span,.izipay-button-mark{font:800 20px Arial,sans-serif;letter-spacing:-1.1px;color:#ef474b}.checkout-pay-product-brand>span strong,.izipay-button-mark strong{color:#23bdb8}.checkout-pay-product-brand small{font-size:10px;color:#718096}.izipay-button-mark{font-size:17px;color:#fff;letter-spacing:-1px}.izipay-button-mark strong{color:#baf4ef}.checkout-page #pay-now{display:inline-flex;align-items:center;justify-content:center;gap:9px}.payment-detail-panel{margin-bottom:14px}@media(max-width:680px){.checkout-pay-product{grid-template-columns:68px minmax(0,1fr);gap:11px;padding:11px}.checkout-pay-product-image{width:68px;height:68px}.checkout-pay-product-brand{grid-column:1/-1;display:flex;justify-content:flex-start;align-items:center;gap:8px;padding:9px 0 0;border-left:0;border-top:1px solid #e6eaf0}.checkout-pay-product-brand>span{font-size:17px}.checkout-pay-product-brand small{font-size:10px}}

@@ -34,17 +34,8 @@
         <div class="order-result-step {{ 'active' if loop.index0 <= active else '' }}"><span>{{ "✓" if loop.index0 < active else loop.index }}</span><small>{{ step }}</small></div>
         {% endfor %}
       </div>
-      {% if order.payment_status == "pending" and order.payment_method == "PagoEfectivo" %}
-      <div class="payment-instructions">
-        <h3>Completa tu pago en PagoEfectivo</h3>
-        {% if order.payment_details.reference %}<p><strong>Código CIP:</strong> <code>{{ order.payment_details.reference }}</code></p>{% endif %}
-        {% if order.payment_details.verification_code %}<p><strong>Código de verificación:</strong> <code>{{ order.payment_details.verification_code }}</code></p>{% endif %}
-        {% if order.payment_details.date_of_expiration %}<p><strong>Vence:</strong> {{ order.payment_details.date_of_expiration }}</p>{% endif %}
-        {% if order.payment_details.ticket_url %}<a class="button button-gold" href="{{ order.payment_details.ticket_url }}" target="_blank" rel="noopener noreferrer">Ver instrucciones de pago</a>{% endif %}
-        {% if not order.payment_details.reference %}<p id="payment-instructions-waiting">Estamos preparando el código de pago. Esta página se actualizará cuando Mercado Pago lo entregue.</p>{% endif %}
-      </div>
-      {% elif order.payment_status == "pending" %}
-      <div class="payment-instructions"><h3>Estamos confirmando tu pago</h3><p>El pedido cambiará a “Pago aprobado” cuando Mercado Pago confirme la transacción. Puedes revisar el estado en Mi cuenta.</p></div>
+      {% if order.payment_status == "pending" %}
+      <div class="payment-instructions"><h3>Estamos confirmando tu pago</h3><p>El pedido se marcará como pagado cuando el proveedor de pago confirme la transacción. Puedes revisar el estado en Mi cuenta.</p></div>
       {% endif %}
       <div class="order-result-columns">
         <div><h3>Tu pedido</h3>{% for item in order.items %}<p class="order-result-item"><span>{{ item.name }} × {{ item.quantity }}</span><strong>S/ {{ "%.2f"|format(item.price * item.quantity) }}</strong></p>{% endfor %}</div>
