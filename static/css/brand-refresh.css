@@ -258,3 +258,88 @@ body { background:#fbfaf7; color:var(--ink); }
   .payment-method-icon.cash-icon { width: 78px; }
   .payment-logo-mp > span, .payment-wordmark { font-size: 9px; }
 }
+
+/* Checkout visual system: fixed brand bar and clean payment-logo rows. */
+.checkout-page { padding-top: 76px; }
+.checkout-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 1000;
+  box-sizing: border-box;
+  height: 76px;
+  min-height: 76px;
+  padding: 0 clamp(20px, 5vw, 76px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  background: #101a35;
+  box-shadow: 0 5px 22px rgba(10, 20, 42, .17);
+}
+.checkout-header .brand { flex: 0 0 auto; display: flex; align-items: center; }
+.checkout-header .brand-logo-img { display: block; width: 150px; height: 62px; object-fit: contain; object-position: left center; }
+.checkout-header-note { display: inline-flex; align-items: center; gap: 8px; color: #e0e7f2; font-size: 12px; font-weight: 600; }
+.checkout-lock-icon { width: 17px; height: 17px; fill: none; stroke: #a9d7b9; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.checkout-header .account-back-link { flex: 0 0 auto; color: #fff; }
+.checkout-shell { margin-top: 28px; }
+.payment-method-picker { gap: 10px; }
+.payment-method-picker legend { margin-bottom: 5px; }
+.payment-method-card {
+  grid-template-columns: 20px 156px minmax(0, 1fr) 18px;
+  gap: 16px;
+  min-height: 84px;
+  padding: 13px 18px;
+  border: 1px solid #e1e6ee;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(14, 32, 63, .025);
+}
+.payment-method-card:hover { border-color: #c6d1e1; background: #fcfdff; }
+.payment-method-card:has(input:checked) { border-color: #d5a53a; background: #fffdf8; box-shadow: 0 0 0 3px rgba(216, 166, 44, .12); }
+.payment-method-icon,
+.payment-method-icon.yape-icon,
+.payment-method-icon.cash-icon {
+  box-sizing: border-box;
+  width: 156px;
+  min-width: 0;
+  height: 54px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+.payment-method-icon img { display: block; width: 100%; max-width: 146px; max-height: 50px; object-fit: contain; object-position: left center; }
+.payment-method-icon.yape-icon img { width: 52px; height: 52px; object-position: center; }
+.payment-method-icon.cash-icon img { width: 146px; max-height: 34px; }
+.payment-method-copy { min-width: 0; gap: 5px; }
+.payment-method-copy strong { color: #12203a; font: 700 14px Montserrat, sans-serif; }
+.payment-method-copy small { color: #71809a; font-size: 11px; line-height: 1.45; }
+.payment-option-check { justify-self: end; font-size: 17px; font-weight: 800; }
+@media (max-width: 680px) {
+  .checkout-page { padding-top: 64px; }
+  .checkout-header { height: 64px; min-height: 64px; padding-inline: 14px; gap: 8px; }
+  .checkout-header .brand-logo-img { width: 116px; height: 52px; }
+  .checkout-header-note { font-size: 10px; gap: 5px; }
+  .checkout-lock-icon { width: 14px; height: 14px; }
+  .checkout-header .account-back-link { padding: 8px 11px; font-size: 11px; }
+  .checkout-shell { margin-top: 22px; }
+  .payment-method-card { grid-template-columns: 18px 94px minmax(0, 1fr) 14px; gap: 9px; min-height: 74px; padding: 10px 9px; }
+  .payment-method-icon, .payment-method-icon.yape-icon, .payment-method-icon.cash-icon { width: 94px; height: 48px; }
+  .payment-method-icon img { max-width: 90px; max-height: 42px; }
+  .payment-method-icon.yape-icon img { width: 46px; height: 46px; }
+  .payment-method-icon.cash-icon img { max-width: 90px; max-height: 25px; }
+  .payment-method-copy strong { font-size: 11px; }
+  .payment-method-copy small { font-size: 9px; }
+}
+@media (max-width: 390px) {
+  .checkout-header-note { display: none; }
+  .checkout-header { justify-content: space-between; }
+  .payment-method-card { grid-template-columns: 17px 78px minmax(0, 1fr) 12px; gap: 7px; }
+  .payment-method-icon, .payment-method-icon.yape-icon, .payment-method-icon.cash-icon { width: 78px; }
+  .payment-method-icon img, .payment-method-icon.cash-icon img { max-width: 76px; }
+  .payment-method-icon.yape-icon img { width: 44px; height: 44px; }
+}
