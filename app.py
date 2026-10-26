@@ -141,6 +141,7 @@ def init_db():
                 description TEXT NOT NULL DEFAULT '',
                 image TEXT NOT NULL DEFAULT '',
                 stock INTEGER NOT NULL DEFAULT 0,
+                reserved_stock INTEGER NOT NULL DEFAULT 0,
                 active INTEGER NOT NULL DEFAULT 1,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -188,6 +189,7 @@ def init_db():
                 payment_status TEXT NOT NULL DEFAULT 'unpaid',
                 mp_order_id TEXT NOT NULL DEFAULT '',
                 mp_payment_details TEXT NOT NULL DEFAULT '{}',
+                stock_deducted INTEGER NOT NULL DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -240,7 +242,13 @@ def init_db():
         item_columns = table_columns(conn, "items")
         if "mp_category_id" not in item_columns:
             conn.execute("ALTER TABLE items ADD COLUMN mp_category_id TEXT NOT NULL DEFAULT ''")
+        if "reserved_stock" not in item_columns:
+            conn.execute("ALTER TABLE items ADD COLUMN reserved_stock INTEGER NOT NULL DEFAULT 0")
         order_columns = table_columns(conn, "orders")
+        if "stock_deducted" not in order_columns:
+            # Existing orders used the old flow, which deducted stock when created.
+            conn.execute("ALTER TABLE orders ADD COLUMN stock_deducted INTEGER NOT NULL DEFAULT 1")
+            order_columns.add("stock_deducted")
         for column, definition in {
             "payment_method": "TEXT NOT NULL DEFAULT 'Por coordinar'",
             "customer_id": "INTEGER",
@@ -248,6 +256,7 @@ def init_db():
             "payment_status": "TEXT NOT NULL DEFAULT 'unpaid'",
             "mp_order_id": "TEXT NOT NULL DEFAULT ''",
             "mp_payment_details": "TEXT NOT NULL DEFAULT '{}'",
+            "stock_deducted": "INTEGER NOT NULL DEFAULT 0",
         }.items():
             if column not in order_columns:
                 conn.execute(f"ALTER TABLE orders ADD COLUMN {column} {definition}")
@@ -508,22 +517,19 @@ def reconcile_mp_order(order_id, mp_order_id=None, order_data=None):
         if current["payment_status"] != "pending":
             return current["payment_status"] == "paid"
         if now_paid:
+            deduct_confirmed_order_stock(conn, current)
             cur = conn.execute(
                 "UPDATE orders SET payment_status='paid',status='Confirmado' WHERE id=? AND payment_status='pending'",
                 (order_id,),
             )
             changed = cur.rowcount == 1
         elif terminal_failure:
+            release_order_stock(conn, current)
             cur = conn.execute(
                 "UPDATE orders SET payment_status='failed',status='Cancelado' WHERE id=? AND payment_status='pending'",
                 (order_id,),
             )
-            if cur.rowcount == 1:
-                for item in json.loads(current["items_json"] or "[]"):
-                    if item.get("type") == "product":
-                        conn.execute("UPDATE items SET stock=stock+? WHERE id=?",
-                                     (int(item["quantity"]), int(item["id"])))
-                changed = True
+            changed = cur.rowcount == 1
     if changed and now_paid:
         order_items = json.loads(row["items_json"] or "[]")
         send_order_email(
@@ -547,10 +553,58 @@ def valid_mp_webhook_signature():
     return hmac.compare_digest(expected, parts["v1"])
 
 
-def item_dict(row):
+def item_dict(row, public=False):
     d = dict(row)
+    reserved = int(d.get("reserved_stock", 0) or 0)
+    if public and d.get("type") == "product":
+        d["stock"] = max(0, int(d["stock"]) - reserved)
+        d.pop("reserved_stock", None)
+    else:
+        d["reserved_stock"] = reserved
     d["stock_status"] = "Agotado" if d["stock"] <= 0 else ("Última unidad" if d["stock"] == 1 else "Disponible")
     return d
+
+
+def order_product_lines(order):
+    data = dict(order)
+    try:
+        items = json.loads(data.get("items_json") or "[]")
+    except (TypeError, ValueError):
+        items = []
+    return [item for item in items if item.get("type") == "product"]
+
+
+def deduct_confirmed_order_stock(conn, order):
+    data = dict(order)
+    if int(data.get("stock_deducted", 0) or 0):
+        return
+    for item in order_product_lines(data):
+        quantity, item_id = int(item["quantity"]), int(item["id"])
+        cur = conn.execute(
+            """UPDATE items SET stock=stock-?,
+               reserved_stock=CASE WHEN reserved_stock>=? THEN reserved_stock-? ELSE 0 END
+               WHERE id=? AND stock>=?""",
+            (quantity, quantity, quantity, item_id, quantity),
+        )
+        if cur.rowcount != 1:
+            raise RuntimeError(f"No hay stock suficiente para confirmar el producto {item_id} del pedido {data['id']}.")
+    conn.execute("UPDATE orders SET stock_deducted=1 WHERE id=?", (data["id"],))
+
+
+def release_order_stock(conn, order):
+    data = dict(order)
+    deducted = int(data.get("stock_deducted", 0) or 0)
+    for item in order_product_lines(data):
+        quantity, item_id = int(item["quantity"]), int(item["id"])
+        if deducted:
+            conn.execute("UPDATE items SET stock=stock+? WHERE id=?", (quantity, item_id))
+        else:
+            conn.execute(
+                "UPDATE items SET reserved_stock=CASE WHEN reserved_stock>=? THEN reserved_stock-? ELSE 0 END WHERE id=?",
+                (quantity, quantity, item_id),
+            )
+    if deducted:
+        conn.execute("UPDATE orders SET stock_deducted=0 WHERE id=?", (data["id"],))
 
 
 def is_admin():
@@ -591,7 +645,7 @@ def get_items():
             rows = conn.execute("SELECT * FROM items WHERE active=1 AND type=? ORDER BY id DESC", (kind,)).fetchall()
         else:
             rows = conn.execute("SELECT * FROM items WHERE active=1 ORDER BY id DESC").fetchall()
-    return jsonify([item_dict(r) for r in rows])
+    return jsonify([item_dict(r, public=True) for r in rows])
 
 
 @app.get("/api/contact")
@@ -972,6 +1026,11 @@ def update_item(item_id):
             stock = max(0, int(data.get("stock", old["stock"])))
         except (ValueError, TypeError):
             return jsonify({"message": "Precio o cantidad no válidos."}), 400
+        reserved_stock = int(old["reserved_stock"] or 0)
+        if stock < reserved_stock:
+            return jsonify({"message": f"No puedes fijar el stock por debajo de las {reserved_stock} unidades reservadas en pagos pendientes."}), 409
+        if old["type"] == "product" and kind != "product" and reserved_stock:
+            return jsonify({"message": "No puedes convertir este producto en servicio mientras tenga pagos pendientes."}), 409
         image = str(data.get("image", old["image"])).strip()
         uploaded = request.files.get("image_file") if request.files else None
         if uploaded and uploaded.filename and allowed_file(uploaded.filename):
@@ -994,6 +1053,11 @@ def delete_item(item_id):
     if not is_admin():
         return jsonify({"message": "No autorizado"}), 401
     with db() as conn:
+        item = conn.execute("SELECT reserved_stock FROM items WHERE id=?", (item_id,)).fetchone()
+        if not item:
+            return jsonify({"message": "No encontrado"}), 404
+        if int(item["reserved_stock"] or 0):
+            return jsonify({"message": "No puedes eliminar un producto con pagos pendientes."}), 409
         conn.execute("DELETE FROM items WHERE id=?", (item_id,))
     return jsonify({"ok": True})
 
@@ -1057,7 +1121,8 @@ def create_order():
                 return jsonify({"message": "Uno de los artículos ya no está disponible."}), 409
             if item["type"] != "product":
                 return jsonify({"message": "Los servicios se coordinan por WhatsApp y no se agregan al pago del carrito."}), 400
-            if item["stock"] < qty:
+            available_stock = int(item["stock"]) - int(item["reserved_stock"] or 0)
+            if available_stock < qty:
                 return jsonify({"message": f"Stock insuficiente para {item['name']}."}), 409
             total += float(item["price"]) * qty
             verified.append({"id": item_id, "name": item["name"], "type": item["type"],
@@ -1066,7 +1131,7 @@ def create_order():
         conn.execute("UPDATE customers SET phone=? WHERE id=? AND (phone='' OR phone IS NULL)", (contact, customer_id))
         for line in verified:
             cur_stock = conn.execute(
-                "UPDATE items SET stock=stock-? WHERE id=? AND stock>=?",
+                "UPDATE items SET reserved_stock=reserved_stock+? WHERE id=? AND stock-reserved_stock>=?",
                 (line["quantity"], line["id"], line["quantity"]),
             )
             if cur_stock.rowcount != 1:
@@ -1074,8 +1139,8 @@ def create_order():
                 return jsonify({"message": f"Stock insuficiente para {line['name']}."}), 409
         cur = conn.execute(
             """INSERT INTO orders(customer_name,customer_contact,address,notes,items_json,total,payment_method,
-               customer_id,customer_email,payment_status)
-               VALUES(?,?,?,?,?,?,?,?,?,'pending')""",
+               customer_id,customer_email,payment_status,stock_deducted)
+               VALUES(?,?,?,?,?,?,?,?,?,'pending',0)""",
             (customer["name"], contact, address, notes, json_dumps(verified), total,
              methods[method_key], customer_id, customer["email"]),
         )
@@ -1181,9 +1246,11 @@ def create_order():
                 "UPDATE orders SET mp_order_id=?,mp_payment_details=?,payment_status=?,status=? WHERE id=?",
                 (mp_order_id, json_dumps(details), local_payment_status, local_status, order_id),
             )
-            if failed:
-                for line in verified:
-                    conn.execute("UPDATE items SET stock=stock+? WHERE id=?", (line["quantity"], line["id"]))
+            current_order = conn.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
+            if paid:
+                deduct_confirmed_order_stock(conn, current_order)
+            elif failed:
+                release_order_stock(conn, current_order)
         if paid:
             send_order_email(
                 customer["email"], f"Pago confirmado — pedido #{order_id}",
@@ -1199,9 +1266,10 @@ def create_order():
     except Exception as exc:
         app.logger.exception("No se pudo crear el pago del pedido %s", order_id)
         with db() as conn:
-            for line in verified:
-                conn.execute("UPDATE items SET stock=stock+? WHERE id=?", (line["quantity"], line["id"]))
-            conn.execute("DELETE FROM orders WHERE id=? AND payment_status='pending'", (order_id,))
+            current_order = conn.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
+            if current_order and current_order["payment_status"] == "pending":
+                release_order_stock(conn, current_order)
+                conn.execute("DELETE FROM orders WHERE id=? AND payment_status='pending'", (order_id,))
         message = str(exc) if isinstance(exc, RuntimeError) else "No se pudo iniciar el pago. Inténtalo de nuevo."
         if isinstance(exc, MercadoPagoRateLimitError):
             return jsonify({"message": message, "retry_after": exc.retry_after}), 429
@@ -1283,6 +1351,14 @@ def json_dumps(value):
 def get_orders():
     if not is_admin():
         return jsonify({"message": "No autorizado"}), 401
+    with db() as conn:
+        rows = conn.execute("SELECT * FROM orders ORDER BY id DESC LIMIT 200").fetchall()
+    for row in rows:
+        if row["payment_status"] == "pending" and row["mp_order_id"]:
+            try:
+                reconcile_mp_order(row["id"])
+            except Exception:
+                app.logger.exception("No se pudo actualizar el pago pendiente del pedido %s", row["id"])
     with db() as conn:
         rows = conn.execute("SELECT * FROM orders ORDER BY id DESC LIMIT 200").fetchall()
     import json
