@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#071329">
+<title>Pedido #{{ order.id }} | FLOVA by Cada</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="order-result-page" data-order-id="{{ order.id }}" data-payment-status="{{ order.payment_status }}">
+<header class="checkout-header"><a class="brand" href="/"><img class="brand-logo-img" src="/static/flova-logo-transparent.png" alt="FLOVA by Cada"></a><a class="account-back-link" href="/cuenta">Mi cuenta</a></header>
+<main class="order-result-shell">
+  <a class="checkout-text-link" href="/cuenta">← Volver a mis pedidos</a>
+  <section class="order-result-card">
+    {% if order.payment_status == "paid" %}
+    <div class="order-result-status approved"><span>✓</span><div><h1>¡Pago aprobado!</h1><p>Tu compra está confirmada y ya puedes seguir el estado del pedido.</p></div></div>
+    {% elif order.payment_status == "failed" %}
+    <div class="order-result-status failed"><span>!</span><div><h1>El pago no se completó</h1><p>El pedido no fue confirmado. Puedes volver al carrito e intentarlo otra vez.</p></div></div>
+    {% else %}
+    <div class="order-result-status pending"><span>!</span><div><h1>Pago pendiente</h1><p>Completa el pago con las instrucciones de {{ order.payment_method }} para confirmar tu compra.</p></div></div>
+    {% endif %}
+    <div class="order-result-top"><div><span>Pedido #{{ order.id }}</span><small>Realizado el {{ order.created_at }}</small></div><strong>Total<br><b>S/ {{ "%.2f"|format(order.total) }}</b></strong></div>
+    <div class="order-tracking">
+      <h2>Entrega y seguimiento de pedido</h2>
+      <div class="order-result-timeline">
+        {% set delivery_steps = ["Pago aprobado", "Alistando pedido", "Listo para entrega", "Entregado"] %}
+        {% if order.payment_status == "paid" %}
+          {% set active = 0 if order.status == "Confirmado" else 1 if order.status == "En preparación" else 3 if order.status == "Entregado" else 0 %}
+        {% else %}
+          {% set active = -1 %}
+        {% endif %}
+        {% for step in delivery_steps %}
+        <div class="order-result-step {{ 'active' if loop.index0 <= active else '' }}"><span>{{ "✓" if loop.index0 < active else loop.index }}</span><small>{{ step }}</small></div>
+        {% endfor %}
+      </div>
+      {% if order.payment_status == "pending" and order.payment_method == "PagoEfectivo" %}
+      <div class="payment-instructions">
+        <h3>Completa tu pago en PagoEfectivo</h3>
+        {% if order.payment_details.reference %}<p><strong>Código CIP:</strong> <code>{{ order.payment_details.reference }}</code></p>{% endif %}
+        {% if order.payment_details.verification_code %}<p><strong>Código de verificación:</strong> <code>{{ order.payment_details.verification_code }}</code></p>{% endif %}
+        {% if order.payment_details.date_of_expiration %}<p><strong>Vence:</strong> {{ order.payment_details.date_of_expiration }}</p>{% endif %}
+        {% if order.payment_details.ticket_url %}<a class="button button-gold" href="{{ order.payment_details.ticket_url }}" target="_blank" rel="noopener noreferrer">Ver instrucciones de pago</a>{% endif %}
+        {% if not order.payment_details.reference %}<p id="payment-instructions-waiting">Estamos preparando el código de pago. Esta página se actualizará cuando Mercado Pago lo entregue.</p>{% endif %}
+      </div>
+      {% elif order.payment_status == "pending" %}
+      <div class="payment-instructions"><h3>Estamos confirmando tu pago</h3><p>El pedido cambiará a “Pago aprobado” cuando Mercado Pago confirme la transacción. Puedes revisar el estado en Mi cuenta.</p></div>
+      {% endif %}
+      <div class="order-result-columns">
+        <div><h3>Tu pedido</h3>{% for item in order.items %}<p class="order-result-item"><span>{{ item.name }} × {{ item.quantity }}</span><strong>S/ {{ "%.2f"|format(item.price * item.quantity) }}</strong></p>{% endfor %}</div>
+        <div><h3>Medio de pago</h3><p>{{ order.payment_method }} · {% if order.payment_status == "paid" %}Pagado{% elif order.payment_status == "failed" %}No pagado{% else %}Pendiente{% endif %}</p><h3>Entrega</h3><p>{{ order.address or "A coordinar con FLOVA" }}</p></div>
+      </div>
+      <a class="button button-gold order-result-account-link" href="/cuenta">Ir a mis pedidos</a>
+    </div>
+  </section>
+</main>
+<script>
+const orderId=Number(document.body.dataset.orderId),initialStatus=document.body.dataset.paymentStatus;
+let refreshCount=0;
+const refreshTimer=setInterval(async()=>{refreshCount+=1;if(refreshCount>12){clearInterval(refreshTimer);return}try{const response=await fetch('/api/customer/orders');if(!response.ok)return;const orders=await response.json();const order=orders.find(item=>item.id===orderId);if(order&&(order.payment_status!==initialStatus||(order.payment_details&&order.payment_details.reference&&document.getElementById('payment-instructions-waiting')))){location.reload()}}catch(error){}},15000);
+</script>
+</body>
+</html>

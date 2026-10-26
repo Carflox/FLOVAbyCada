@@ -186,6 +186,7 @@ def init_db():
                 customer_email TEXT NOT NULL DEFAULT '',
                 payment_status TEXT NOT NULL DEFAULT 'unpaid',
                 mp_order_id TEXT NOT NULL DEFAULT '',
+                mp_payment_details TEXT NOT NULL DEFAULT '{}',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -242,6 +243,7 @@ def init_db():
             "customer_email": "TEXT NOT NULL DEFAULT ''",
             "payment_status": "TEXT NOT NULL DEFAULT 'unpaid'",
             "mp_order_id": "TEXT NOT NULL DEFAULT ''",
+            "mp_payment_details": "TEXT NOT NULL DEFAULT '{}'",
         }.items():
             if column not in order_columns:
                 conn.execute(f"ALTER TABLE orders ADD COLUMN {column} {definition}")
@@ -380,6 +382,13 @@ def mercado_pago_access_token():
     raise RuntimeError("Configura FLOVA_MP_CLIENT_ID y FLOVA_MP_CLIENT_SECRET, o un FLOVA_MP_ACCESS_TOKEN.")
 
 
+class MercadoPagoRateLimitError(RuntimeError):
+    def __init__(self, retry_after):
+        self.retry_after = retry_after
+        message = (f"Mercado Pago limitó temporalmente las solicitudes. Espera {retry_after} segundos antes de volver a intentar."
+                   if retry_after is not None else "Mercado Pago limitó temporalmente las solicitudes. Espera el tiempo indicado por Retry-After antes de volver a intentar.")
+        super().__init__(message)
+
 def mercado_pago_request(path, method="GET", payload=None, idempotency_key=None, caller_id=None):
     token = mercado_pago_access_token()
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
@@ -398,6 +407,13 @@ def mercado_pago_request(path, method="GET", payload=None, idempotency_key=None,
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         app.logger.error("Mercado Pago respondió %s: %s", exc.code, detail[:1000])
+        if exc.code == 429:
+            raw_retry_after = (exc.headers.get("Retry-After", "") if exc.headers else "").strip()
+            try:
+                retry_after = max(1, int(raw_retry_after))
+            except (TypeError, ValueError):
+                retry_after = None
+            raise MercadoPagoRateLimitError(retry_after) from exc
         raise RuntimeError("Mercado Pago no pudo procesar el pago. Inténtalo nuevamente.") from exc
 
 
@@ -456,43 +472,63 @@ def mercado_pago_get_chargeback_document(doc_type, doc_uuid, caller_id):
         raise RuntimeError("No se pudo obtener el documento de Mercado Pago.") from exc
 
 
+def payment_transaction_from_order(remote):
+    transactions = remote.get("transactions") or {}
+    payments = transactions.get("payments") or []
+    return payments[0] if payments and isinstance(payments[0], dict) else {}
+
 def reconcile_mp_order(order_id, mp_order_id=None, order_data=None):
     with db() as conn:
         row = conn.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
     if not row or not (mp_order_id or row["mp_order_id"]):
         return False
-    remote = order_data or mercado_pago_request("/v1/orders/" + (mp_order_id or row["mp_order_id"]))
+    remote = order_data or mercado_pago_request("/v1/orders/" + quote(mp_order_id or row["mp_order_id"], safe=""))
     if remote.get("external_reference") != str(order_id):
         app.logger.error("Referencia externa no coincide para el pedido %s", order_id)
         return False
-    paid_amount = float(remote.get("total_paid_amount") or 0)
-    expected_amount = float(row["total"])
-    status = remote.get("status")
-    now_paid = status == "processed" and paid_amount >= expected_amount
-    # Orders API spells this state "canceled" (one l); keep "cancelled" for older responses.
+    payment_details = payment_details_from_order(remote)
+    transaction = payment_transaction_from_order(remote)
+    paid_amount = Decimal(str(transaction.get("paid_amount") or remote.get("total_paid_amount") or "0"))
+    expected_amount = Decimal(str(row["total"]))
+    status = str(remote.get("status") or "").lower()
+    transaction_status = str(transaction.get("status") or "").lower()
+    now_paid = status == "processed" and transaction_status == "processed" and paid_amount >= expected_amount
     terminal_failure = status in {"failed", "canceled", "cancelled", "expired"}
     changed = False
     with db() as conn:
         current = conn.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
-        if not current or current["payment_status"] != "pending":
-            return current and current["payment_status"] == "paid"
+        if not current:
+            return False
+        conn.execute("UPDATE orders SET mp_payment_details=? WHERE id=?",
+                     (json_dumps(payment_details), order_id))
+        if current["payment_status"] != "pending":
+            return current["payment_status"] == "paid"
         if now_paid:
-            cur = conn.execute("UPDATE orders SET payment_status='paid',status='Confirmado' WHERE id=? AND payment_status='pending'", (order_id,))
+            cur = conn.execute(
+                "UPDATE orders SET payment_status='paid',status='Confirmado' WHERE id=? AND payment_status='pending'",
+                (order_id,),
+            )
             changed = cur.rowcount == 1
         elif terminal_failure:
-            cur = conn.execute("UPDATE orders SET payment_status='failed',status='Cancelado' WHERE id=? AND payment_status='pending'", (order_id,))
+            cur = conn.execute(
+                "UPDATE orders SET payment_status='failed',status='Cancelado' WHERE id=? AND payment_status='pending'",
+                (order_id,),
+            )
             if cur.rowcount == 1:
                 for item in json.loads(current["items_json"] or "[]"):
                     if item.get("type") == "product":
-                        conn.execute("UPDATE items SET stock=stock+? WHERE id=?", (int(item["quantity"]), int(item["id"])))
+                        conn.execute("UPDATE items SET stock=stock+? WHERE id=?",
+                                     (int(item["quantity"]), int(item["id"])))
                 changed = True
     if changed and now_paid:
         order_items = json.loads(row["items_json"] or "[]")
-        send_order_email(row["customer_email"], f"Pago confirmado — pedido #{order_id}",
-                         "Tu pago fue aprobado. Ya estamos preparando tu compra.", order_id, row["customer_name"],
-                         order_items, expected_amount, "Mercado Pago", "Confirmado", row["notes"])
+        send_order_email(
+            row["customer_email"], f"Pago confirmado — pedido #{order_id}",
+            "Tu pago fue aprobado. Ya estamos preparando tu compra.",
+            order_id, row["customer_name"], order_items, expected_amount,
+            row["payment_method"], "Confirmado", row["notes"],
+        )
     return now_paid
-
 
 def valid_mp_webhook_signature():
     secret = os.environ.get("FLOVA_MP_WEBHOOK_SECRET")
@@ -540,7 +576,7 @@ def customer_account():
 
 @app.get("/checkout")
 def checkout_page():
-    return render_template("checkout.html")
+    return render_template("checkout.html", mp_public_key=os.environ.get("FLOVA_MP_PUBLIC_KEY", "").strip())
 
 
 @app.get("/api/items")
@@ -848,6 +884,10 @@ def customer_orders():
             d["items"] = json.loads(d.pop("items_json"))
         except Exception:
             d["items"] = []
+        try:
+            d["payment_details"] = json.loads(d.pop("mp_payment_details", "{}") or "{}")
+        except Exception:
+            d["payment_details"] = {}
         output.append(d)
     return jsonify(output)
 
@@ -952,6 +992,19 @@ def delete_item(item_id):
     return jsonify({"ok": True})
 
 
+def payment_details_from_order(remote):
+    transactions = remote.get("transactions") or {}
+    payments = transactions.get("payments") or []
+    payment = payments[0] if payments and isinstance(payments[0], dict) else {}
+    method = payment.get("payment_method") or {}
+    allowed = ("id", "type", "ticket_url", "reference", "verification_code", "financial_institution")
+    details = {key: method.get(key) for key in allowed if method.get(key)}
+    details["status"] = payment.get("status") or remote.get("status") or ""
+    details["status_detail"] = payment.get("status_detail") or remote.get("status_detail") or ""
+    details["date_of_expiration"] = payment.get("date_of_expiration") or remote.get("date_of_expiration") or ""
+    return details
+
+
 @app.post("/api/orders")
 def create_order():
     data = request.get_json(silent=True) or {}
@@ -962,16 +1015,24 @@ def create_order():
     address = str(data.get("address", "")).strip()
     notes = str(data.get("notes", "")).strip()
     cart = data.get("items", [])
-    payment_method = str(data.get("payment_method", "")).strip()
+    method_key = str(data.get("method", "")).strip().lower()
+    methods = {
+        "card": "Tarjeta (Mercado Pago)",
+        "yape": "Yape",
+        "pagoefectivo_atm": "PagoEfectivo",
+    }
+    if method_key not in methods:
+        return jsonify({"message": "Elige tarjeta, Yape o PagoEfectivo."}), 400
     if not contact or not cart:
         return jsonify({"message": "Completa tu teléfono de contacto y agrega artículos al carrito."}), 400
-    if payment_method != "Mercado Pago":
-        return jsonify({"message": "Selecciona Mercado Pago para pagar en línea."}), 400
-    public_url = os.environ.get("FLOVA_PUBLIC_URL", "").rstrip("/")
-    if not public_url.startswith("https://") or not mercado_pago_is_configured():
+    if not mercado_pago_is_configured():
         return jsonify({"message": "Los pagos todavía no están configurados. Contacta con FLOVA by Cada."}), 503
+
     with db() as conn:
-        customer = conn.execute("SELECT id,name,email,phone FROM customers WHERE id=?", (customer_id,)).fetchone()
+        customer = conn.execute(
+            "SELECT id,name,email,phone,document_type,document_number FROM customers WHERE id=?",
+            (customer_id,),
+        ).fetchone()
         if not customer:
             session.pop("customer_id", None)
             return jsonify({"message": "Tu sesión venció. Inicia sesión de nuevo."}), 401
@@ -981,7 +1042,7 @@ def create_order():
             try:
                 item_id = int(line.get("id"))
                 qty = int(line.get("quantity", 1))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, AttributeError):
                 return jsonify({"message": "Hay un artículo no válido en el carrito."}), 400
             if qty < 1:
                 return jsonify({"message": "Cantidad no válida."}), 400
@@ -995,61 +1056,138 @@ def create_order():
             total += float(item["price"]) * qty
             verified.append({"id": item_id, "name": item["name"], "type": item["type"],
                              "price": float(item["price"]), "quantity": qty})
-        if contact:
-            conn.execute("UPDATE customers SET phone=? WHERE id=? AND (phone='' OR phone IS NULL)", (contact, customer_id))
+        conn.execute("UPDATE customers SET phone=? WHERE id=? AND (phone='' OR phone IS NULL)", (contact, customer_id))
         for line in verified:
-            if line["type"] == "product":
-                cur_stock = conn.execute("UPDATE items SET stock=stock-? WHERE id=? AND stock>=?", (line["quantity"], line["id"], line["quantity"]))
-                if cur_stock.rowcount != 1:
-                    conn.rollback()
-                    return jsonify({"message": f"Stock insuficiente para {line['name']}."}), 409
-        cur = conn.execute("""INSERT INTO orders(customer_name,customer_contact,address,notes,items_json,total,payment_method,customer_id,customer_email,payment_status)
-            VALUES(?,?,?,?,?,?,?,?,?,'pending')""",
-            (customer["name"], contact, address, notes, json_dumps(verified), total, payment_method, customer_id, customer["email"]))
+            cur_stock = conn.execute(
+                "UPDATE items SET stock=stock-? WHERE id=? AND stock>=?",
+                (line["quantity"], line["id"], line["quantity"]),
+            )
+            if cur_stock.rowcount != 1:
+                conn.rollback()
+                return jsonify({"message": f"Stock insuficiente para {line['name']}."}), 409
+        cur = conn.execute(
+            """INSERT INTO orders(customer_name,customer_contact,address,notes,items_json,total,payment_method,
+               customer_id,customer_email,payment_status)
+               VALUES(?,?,?,?,?,?,?,?,?,'pending')""",
+            (customer["name"], contact, address, notes, json_dumps(verified), total,
+             methods[method_key], customer_id, customer["email"]),
+        )
         order_id = cur.lastrowid
+
     try:
-        gateway_items = [
-    {
-        "external_code": str(line["id"]),
-        "title": line["name"],
-        "description": line["name"],
-        "quantity": line["quantity"],
-        "unit_price": f"{line['price']:.2f}",
-    }
-    for line in verified
-]
         name_parts = customer["name"].strip().split(maxsplit=1)
         payer = {"email": customer["email"], "first_name": name_parts[0] if name_parts else "Cliente"}
         if len(name_parts) > 1:
             payer["last_name"] = name_parts[1]
-        remote = mercado_pago_request("/v1/orders", method="POST", idempotency_key=str(uuid.uuid4()), payload={
-            "type": "online", "processing_mode": "manual", "total_amount": f"{total:.2f}",
-            "capture_mode": "automatic_async", "external_reference": str(order_id), "expiration_time": "P1D",
-            "description": ", ".join(f"{line['name']} x{line['quantity']}" for line in verified)[:250],
-            "payer": payer, "items": gateway_items,
-            "config": {"online": {"success_url": f"{public_url}/pago/resultado?order_id={order_id}",
-                                   "failure_url": f"{public_url}/pago/resultado?order_id={order_id}",
-                                   "pending_url": f"{public_url}/pago/resultado?order_id={order_id}", "auto_return": "approved"}}
-        })
-        checkout_url = remote.get("checkout_url")
-        mp_order_id = remote.get("id")
-        if not checkout_url or not mp_order_id:
-            raise RuntimeError("Mercado Pago no devolvió una dirección de pago válida.")
+        identification = data.get("identification")
+        if isinstance(identification, dict) and identification.get("type") and identification.get("number"):
+            payer["identification"] = {
+                "type": str(identification["type"])[:20],
+                "number": str(identification["number"])[:30],
+            }
+        digits = "".join(ch for ch in contact if ch.isdigit())
+        if digits.startswith("51") and len(digits) > 9:
+            digits = digits[2:]
+        phone_number = digits[-9:] if len(digits) >= 9 else digits
+        yape_digits = "".join(ch for ch in str(data.get("payer_phone", "")) if ch.isdigit())
+        if yape_digits.startswith("51") and len(yape_digits) > 9:
+            yape_digits = yape_digits[2:]
+        yape_phone_number = yape_digits[-9:] if len(yape_digits) >= 9 else yape_digits
+        payment_method = {}
+
+        if method_key == "card":
+            token = str(data.get("token", "")).strip()
+            payment_method_id = str(data.get("payment_method_id", "")).strip().lower()
+            payment_type = str(data.get("payment_type", "")).strip().lower()
+            try:
+                installments = int(data.get("installments", 1))
+            except (TypeError, ValueError):
+                installments = 1
+            if not token or not payment_method_id or payment_type not in {"credit_card", "debit_card", "prepaid_card"}:
+                raise RuntimeError("Completa los datos de la tarjeta en el formulario seguro de Mercado Pago.")
+            if installments < 1 or installments > 36:
+                raise RuntimeError("El número de cuotas no es válido.")
+            payment_method = {
+                "id": payment_method_id, "type": payment_type, "token": token,
+                "installments": installments,
+            }
+        elif method_key == "yape":
+            token = str(data.get("token", "")).strip()
+            if not token or len(yape_phone_number) != 9:
+                raise RuntimeError("Ingresa el celular asociado a Yape y el código OTP vigente.")
+            payer["entity_type"] = "individual"
+            payer["phone"] = {"area_code": "51", "number": yape_phone_number}
+            payment_method = {"id": "yape", "type": "debit_card", "token": token}
+        else:
+            payment_method = {"id": "pagoefectivo_atm", "type": "atm"}
+
+        payment = {"amount": f"{total:.2f}", "payment_method": payment_method}
+        if method_key == "pagoefectivo_atm":
+            payment["expiration_time"] = "P1D"
+        payload = {
+            "type": "online",
+            "processing_mode": "automatic",
+            "capture_mode": "automatic_async",
+            "total_amount": f"{total:.2f}",
+            "external_reference": str(order_id),
+            "description": ", ".join(f"{line['name']} x{line['quantity']}" for line in verified)[:150],
+            "payer": payer,
+            "transactions": {"payments": [payment]},
+        }
+        if method_key == "pagoefectivo_atm":
+            payload["payer"]["entity_type"] = "individual"
+        remote = mercado_pago_request(
+            "/v1/orders", method="POST", idempotency_key=str(uuid.uuid4()), payload=payload,
+        )
+        mp_order_id = str(remote.get("id") or "")
+        if not mp_order_id:
+            raise RuntimeError("Mercado Pago no devolvió el número de la orden.")
+        if method_key == "pagoefectivo_atm" and not payment_details_from_order(remote).get("reference"):
+            for _ in range(3):
+                time.sleep(0.5)
+                remote = mercado_pago_request("/v1/orders/" + quote(mp_order_id, safe=""))
+                if payment_details_from_order(remote).get("reference"):
+                    break
+
+        details = payment_details_from_order(remote)
+        mp_status = str(remote.get("status") or "").lower()
+        transaction = payment_transaction_from_order(remote)
+        transaction_status = str(transaction.get("status") or "").lower()
+        paid_amount = Decimal(str(transaction.get("paid_amount") or remote.get("total_paid_amount") or "0"))
+        paid = mp_status == "processed" and transaction_status == "processed" and paid_amount >= Decimal(str(total))
+        failed = mp_status in {"failed", "canceled", "cancelled", "expired"}
+        local_payment_status = "paid" if paid else "failed" if failed else "pending"
+        local_status = "Confirmado" if paid else "Cancelado" if failed else "Pendiente"
         with db() as conn:
-            conn.execute("UPDATE orders SET mp_order_id=? WHERE id=?", (mp_order_id, order_id))
-        return jsonify({"ok": True, "order_id": order_id, "total": round(total, 2),
-                        "currency": remote.get("currency", "PEN"), "payment_status": remote.get("status", "created"),
-                        "checkout_url": checkout_url}), 201
+            conn.execute(
+                "UPDATE orders SET mp_order_id=?,mp_payment_details=?,payment_status=?,status=? WHERE id=?",
+                (mp_order_id, json_dumps(details), local_payment_status, local_status, order_id),
+            )
+            if failed:
+                for line in verified:
+                    conn.execute("UPDATE items SET stock=stock+? WHERE id=?", (line["quantity"], line["id"]))
+        if paid:
+            send_order_email(
+                customer["email"], f"Pago confirmado — pedido #{order_id}",
+                "Tu pago fue aprobado. Ya estamos preparando tu compra.",
+                order_id, customer["name"], verified, total, methods[method_key], "Confirmado", notes,
+            )
+        return jsonify({
+            "ok": True, "order_id": order_id, "total": round(total, 2),
+            "payment_status": local_payment_status, "status": local_status,
+            "payment_method": methods[method_key], "payment_details": details,
+            "result_url": f"/pago/resultado?order_id={order_id}",
+        }), 201
     except Exception as exc:
         app.logger.exception("No se pudo crear el pago del pedido %s", order_id)
         with db() as conn:
             for line in verified:
-                if line["type"] == "product":
-                    conn.execute("UPDATE items SET stock=stock+? WHERE id=?", (line["quantity"], line["id"]))
+                conn.execute("UPDATE items SET stock=stock+? WHERE id=?", (line["quantity"], line["id"]))
             conn.execute("DELETE FROM orders WHERE id=? AND payment_status='pending'", (order_id,))
         message = str(exc) if isinstance(exc, RuntimeError) else "No se pudo iniciar el pago. Inténtalo de nuevo."
+        if isinstance(exc, MercadoPagoRateLimitError):
+            return jsonify({"message": message, "retry_after": exc.retry_after}), 429
         return jsonify({"message": message}), 502
-
 
 @app.get("/api/payments/mercadopago/methods")
 def mercado_pago_payment_methods():
@@ -1074,20 +1212,32 @@ def payment_result():
         order_id = int(request.args.get("order_id", "0"))
     except ValueError:
         order_id = 0
-    if order_id and session.get("customer_id"):
-        with db() as conn:
-            order = conn.execute("SELECT customer_id FROM orders WHERE id=?", (order_id,)).fetchone()
-        if order and order["customer_id"] == session.get("customer_id"):
-            try:
-                reconcile_mp_order(order_id)
-            except Exception:
-                app.logger.exception("No se pudo consultar el resultado del pago %s", order_id)
+    customer_id = session.get("customer_id")
+    if not customer_id:
+        return redirect("/cuenta?next=%2Fcheckout")
     with db() as conn:
-        order = conn.execute("SELECT payment_status,customer_id FROM orders WHERE id=?", (order_id,)).fetchone() if order_id else None
-    if not order or order["customer_id"] != session.get("customer_id"):
+        order = conn.execute("SELECT * FROM orders WHERE id=? AND customer_id=?",
+                             (order_id, customer_id)).fetchone() if order_id else None
+    if not order:
         return redirect("/cuenta")
-    return redirect(f"/cuenta?payment={order['payment_status']}&order_id={order_id}")
-
+    if order["payment_status"] == "pending" and order["mp_order_id"]:
+        try:
+            reconcile_mp_order(order_id)
+        except Exception:
+            app.logger.exception("No se pudo consultar el resultado del pago %s", order_id)
+        with db() as conn:
+            order = conn.execute("SELECT * FROM orders WHERE id=? AND customer_id=?",
+                                 (order_id, customer_id)).fetchone()
+    result = dict(order)
+    try:
+        result["items"] = json.loads(result.pop("items_json") or "[]")
+    except Exception:
+        result["items"] = []
+    try:
+        result["payment_details"] = json.loads(result.pop("mp_payment_details", "{}") or "{}")
+    except Exception:
+        result["payment_details"] = {}
+    return render_template("order_result.html", order=result)
 
 @app.post("/api/payments/mercadopago/webhook")
 def mercado_pago_webhook():
@@ -1125,6 +1275,10 @@ def get_orders():
             d["items"] = json.loads(d.pop("items_json"))
         except Exception:
             d["items"] = []
+        try:
+            d["payment_details"] = json.loads(d.pop("mp_payment_details", "{}") or "{}")
+        except Exception:
+            d["payment_details"] = {}
         output.append(d)
     return jsonify(output)
 

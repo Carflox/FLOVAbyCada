@@ -32,27 +32,28 @@ Credenciales iniciales para pruebas: usuario `admin`, contraseña `cambia-esta-c
 - Al aprobarse un pago y cuando el administrador cambia el estado del pedido, se envía un correo al cliente.
 
 ## Pagos en línea
-El carrito conserva sus productos al ir a Mi cuenta. El checkout `/checkout` presenta el flujo Carrito → Entrega → Pago y un resumen de la compra, adaptado al estilo FLOVA. El comprador elige los métodos habilitados para la cuenta FLOVA (por ejemplo, tarjeta o Yape), paga en el checkout seguro del proveedor y vuelve a la tienda. El stock se reserva al iniciar el pago, se libera si el proveedor lo rechaza o cancela, y el pedido solo figura como pagado al verificar la respuesta autenticada de Mercado Pago.
+El carrito conserva sus productos al ir a Mi cuenta. El checkout /checkout sigue Carrito → Entrega → Pago y presenta Tarjeta, Yape y PagoEfectivo dentro de la tienda. Las tarjetas usan Card Payment Brick; Yape usa token OTP de Mercado Pago; PagoEfectivo genera un CIP y deja el pedido pendiente hasta recibir confirmación. /pago/resultado muestra estado, resumen, instrucciones y etapas de entrega. El stock se reserva al iniciar el pago y se libera si Mercado Pago rechaza o cancela la orden.
 
-El formulario permite seleccionar o guardar una dirección de entrega. El costo y la fecha de envío se coordinan con el cliente y no se agregan al cobro de Mercado Pago en esta versión.
+El formulario permite seleccionar o guardar una dirección de entrega. El costo y la fecha de envío se coordinan con el cliente y no se agregan al cobro. La disponibilidad de cada método depende de la cuenta y de los métodos que Mercado Pago tenga habilitados.
 
-Al entrar al paso **Pago**, el checkout consulta desde el servidor `GET https://api.mercadopago.com/v1/payment_methods` y presenta los medios activos disponibles para la cuenta (por ejemplo, tarjetas, dinero en cuenta o transferencias). La lista es informativa: Mercado Pago determina y valida las opciones finales en su checkout seguro. La consulta requiere credenciales OAuth o `FLOVA_MP_ACCESS_TOKEN` configurado.
+
 
 Para activar pagos reales, crea una aplicación en Mercado Pago y configura estas variables en el servidor:
 
-- `FLOVA_MP_ACCESS_TOKEN`: Access Token privado (usa credenciales de prueba primero).
+- FLOVA_MP_PUBLIC_KEY: Public Key de la aplicación para iniciar MercadoPago.js y el formulario seguro de tarjeta/Yape. Es pública y no reemplaza el Access Token.
+- FLOVA_MP_ACCESS_TOKEN: Access Token privado (usa credenciales de prueba primero).
 - `FLOVA_MP_CLIENT_ID` y `FLOVA_MP_CLIENT_SECRET`: credenciales privadas de la aplicación; si completas ambas, FLOVA obtiene y renueva automáticamente un token con OAuth `client_credentials` para operar en nombre de la propia tienda. También puedes mantener el Access Token fijo anterior.
 - `FLOVA_MP_CALLER_ID`: ID numérico del vendedor propietario de la aplicación, requerido para enviar evidencia de contracargos.
 - `FLOVA_PUBLIC_URL`: URL pública HTTPS del sitio, sin `/` al final.
 - `FLOVA_MP_WEBHOOK_SECRET`: clave secreta del evento **Order (Mercado Pago)** en el panel de Webhooks.
 
-Configura en Mercado Pago el webhook `https://TU-DOMINIO/api/payments/mercadopago/webhook` con el evento **Order (Mercado Pago)**. El servidor verifica la firma del webhook y consulta la order con el Access Token antes de confirmar el pago. No compartas ni subas las credenciales al repositorio. En local, el pago no estará disponible hasta tener credenciales y una URL pública HTTPS para las devoluciones.
+Configura en Mercado Pago el webhook `https://TU-DOMINIO/api/payments/mercadopago/webhook` con el evento **Order (Mercado Pago)**. El servidor verifica la firma del webhook y consulta la order con el Access Token antes de confirmar el pago. No compartas ni subas las credenciales al repositorio. Para confirmar cambios de estado en producción, el webhook debe apuntar a la URL HTTPS pública de FLOVA.
 
 En el panel `/admin`, la sección **Pedidos recibidos** permite consultar órdenes de Mercado Pago por rango de fechas, referencia externa y estado, con paginación. La consulta solo muestra datos operativos y omite tokens del cliente y enlaces de validación 3DS. Los pedidos con pago pendiente incluyen **Cancelar pago**: consulta primero el estado remoto, cancela solo órdenes en estado `created` o `action_required`, usa una clave de idempotencia y sincroniza el pedido y el stock cuando Mercado Pago confirma la cancelación. Los pagos confirmados incluyen **Reembolsar** para devolución total o parcial, con validación del monto disponible y actualización del estado local.
 
 También puedes consultar un contracargo desde **Pedidos recibidos → Consultar contracargo** usando su ID de Mercado Pago. El panel muestra importe, motivo, estado de documentación, fechas, cobertura y pagos relacionados. Los documentos se abren a través del endpoint oficial `GET /v1/chargebacks/documentation/{type}/{uuid}`, con el Access Token y `FLOVA_MP_CALLER_ID` en el servidor; el navegador recibe el archivo con su MIME original sin exponer credenciales. Si el estado de documentación está pendiente, puedes adjuntar hasta cinco archivos PDF, JPG o PNG (máximo 5 MB en conjunto). Antes del envío, FLOVA verifica de nuevo el estado pendiente; Mercado Pago acepta evidencia una sola vez por caso.
 
-Dejé un archivo `.env` en la carpeta del proyecto. Ábrelo en VS Code y completa `FLOVA_MP_CLIENT_ID`, `FLOVA_MP_CLIENT_SECRET` (o, como alternativa, `FLOVA_MP_ACCESS_TOKEN`), `FLOVA_MP_CALLER_ID`, `FLOVA_PUBLIC_URL` y `FLOVA_MP_WEBHOOK_SECRET` con las credenciales privadas de tu aplicación, el ID de vendedor y la URL HTTPS pública. Luego inicia FLOVA con `python app.py`. Con OAuth, el token temporal se mantiene en memoria del servidor y se vuelve a solicitar al vencer; no se expone al navegador. La aplicación carga los valores al arrancar; las variables configuradas por el servidor tienen prioridad. El archivo `.env` está excluido de Git para evitar publicar secretos.
+En Render agrega FLOVA_MP_PUBLIC_KEY junto con el Access Token privado u OAuth; en desarrollo puedes configurarlas en .env. Conserva Client Secret y Access Token solo en el servidor. Con OAuth, el token temporal se mantiene en memoria y se renueva al vencer; nunca se expone al navegador. .env está excluido de Git.
 
 El servidor ya usa la base URL `https://api.mercadopago.com` y agrega automáticamente `Authorization: Bearer` con el token generado por OAuth o con el Access Token fijo. Mantén el Client Secret y los tokens únicamente en el servidor; nunca los pegues en el HTML, JavaScript del navegador, capturas públicas ni repositorios. Para comenzar, utiliza las credenciales de prueba de la aplicación de Mercado Pago.
 
@@ -85,7 +86,7 @@ Si Gmail no permite crear una contraseña de aplicación, puedes usar cualquier 
 - Categorías, búsqueda, filtros de precio y disponibilidad.
 - Stock: Disponible, Última unidad y Agotado.
 - Carrito con cantidad y total estimado.
-- Pagos en línea con Mercado Pago Checkout Pro; consulta la sección **Pagos en línea** para configurar las credenciales y webhooks.
+- Pagos en línea integrados en FLOVA con Mercado Pago Orders: formulario seguro de tarjeta, Yape y PagoEfectivo; consulta la sección **Pagos en línea** para configurar credenciales y webhooks.
 - El panel administrativo permite crear, editar y eliminar artículos y actualizar estados de pedidos.
 
 ## Base de datos y actualización
