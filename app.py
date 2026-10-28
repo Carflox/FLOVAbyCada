@@ -10,6 +10,8 @@ import smtplib, secrets, hashlib, json, time, urllib.request, urllib.error, hmac
 from datetime import datetime
 from decimal import Decimal
 from urllib.parse import urlencode, quote, urlparse
+import mimetypes
+from supabase import create_client
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "flova.db"
@@ -17,6 +19,7 @@ UPLOAD_DIR = BASE_DIR / "static" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
 
+upload_product_image()
 
 def load_local_env():
     """Load local settings without overriding environment variables set by the host."""
@@ -810,11 +813,17 @@ def create_item():
         return jsonify({"message": "Precio o cantidad no válidos."}), 400
     image = str(data.get("image", "")).strip()
     uploaded = request.files.get("image_file") if request.files else None
-    if uploaded and uploaded.filename and allowed_file(uploaded.filename):
-        ext = uploaded.filename.rsplit(".", 1)[1].lower()
-        filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
-        uploaded.save(UPLOAD_DIR / filename)
-        image = f"/static/uploads/{filename}"
+    
+    if uploaded and uploaded.filename:
+        try:
+            image = upload_product_image(uploaded)
+        except ValueError as exc:
+            return jsonify({"message": str(exc)}), 400
+        except Exception:
+            app.logger.exception("Error al subir imagen a Supabase Storage")
+            return jsonify({
+                "message": "No se pudo subir la imagen."
+            }), 502
     with db() as conn:
         payment_link_url = str(data.get("payment_link_url", "")).strip()
         payment_link_order_number = str(data.get("payment_link_order_number", "")).strip()
@@ -860,11 +869,17 @@ def update_item(item_id):
         if payment_link_url and not payment_link_order_number:
             return jsonify({"message": "Agrega también el número de pedido/referencia que muestra Izipay para ese link."}), 400
         uploaded = request.files.get("image_file") if request.files else None
-        if uploaded and uploaded.filename and allowed_file(uploaded.filename):
-            ext = uploaded.filename.rsplit(".", 1)[1].lower()
-            filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
-            uploaded.save(UPLOAD_DIR / filename)
-            image = f"/static/uploads/{filename}"
+        if uploaded and uploaded.filename:
+            try:
+                image = upload_product_image(uploaded)
+            except ValueError as exc:
+                return jsonify({"message": str(exc)}), 400
+            except Exception:
+                app.logger.exception("Error al subir imagen a Supabase Storage")
+                return jsonify({
+                    "message": "No se pudo subir la imagen."
+                }), 502
+
         conn.execute("""UPDATE items SET type=?,name=?,category=?,price=?,description=?,image=?,stock=?,payment_link_url=?,payment_link_order_number=?,active=?
             WHERE id=?""",
             (kind, name, str(data.get("category", old["category"])).strip() or "General",
