@@ -19,7 +19,45 @@ UPLOAD_DIR = BASE_DIR / "static" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
 
-upload_product_image()
+def upload_product_image(uploaded):
+    supabase_url = os.environ.get("SUPABASE_URL", "").strip()
+    supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+
+    if not supabase_url or not supabase_key:
+        raise RuntimeError("Faltan las credenciales de Supabase.")
+
+    if not uploaded or not uploaded.filename:
+        raise ValueError("No se recibió ninguna imagen.")
+
+    if not allowed_file(uploaded.filename):
+        raise ValueError("Formato de imagen no permitido.")
+
+    ext = uploaded.filename.rsplit(".", 1)[1].lower()
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    content_type = (
+        uploaded.mimetype
+        or mimetypes.guess_type(filename)[0]
+        or "application/octet-stream"
+    )
+
+    file_bytes = uploaded.read()
+    if not file_bytes:
+        raise ValueError("La imagen está vacía.")
+
+    storage = create_client(
+        supabase_url, supabase_key
+    ).storage.from_("products")
+
+    storage.upload(
+        filename,
+        file_bytes,
+        file_options={
+            "content-type": content_type,
+            "upsert": "false",
+        },
+    )
+
+    return storage.get_public_url(filename)
 
 def load_local_env():
     """Load local settings without overriding environment variables set by the host."""
